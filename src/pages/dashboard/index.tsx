@@ -20,6 +20,12 @@ export default function Dashboard() {
       console.log("Fetching stats for user:", user?.id);
       if (!user) throw new Error("No user");
       
+      // First check if the user exists in the database
+      console.log("Checking user authentication state:", {
+        isAuthenticated: !!user,
+        userId: user.id,
+      });
+
       const { data: posts, error } = await supabase
         .from("linkedin_posts")
         .select("id, published_at, scheduled_for")
@@ -31,14 +37,19 @@ export default function Dashboard() {
         throw error;
       }
 
-      console.log("Fetched posts for stats:", posts);
+      console.log("Fetched posts for stats:", {
+        totalPosts: posts?.length || 0,
+        posts: posts,
+      });
 
-      const total = posts.length;
-      const published = posts.filter(post => post.published_at).length;
-      const scheduled = posts.filter(post => post.scheduled_for && !post.published_at).length;
+      const total = posts?.length || 0;
+      const published = posts?.filter(post => post.published_at)?.length || 0;
+      const scheduled = posts?.filter(post => post.scheduled_for && !post.published_at)?.length || 0;
       const drafts = total - published - scheduled;
 
-      return { total, published, scheduled, drafts };
+      const stats = { total, published, scheduled, drafts };
+      console.log("Calculated stats:", stats);
+      return stats;
     },
     enabled: !!user,
   });
@@ -50,6 +61,13 @@ export default function Dashboard() {
       console.log("Fetching recent posts for user:", user?.id);
       if (!user) throw new Error("No user");
       
+      // Debug log for query parameters
+      console.log("Query parameters:", {
+        userId: user.id,
+        isCurrentVersion: true,
+        limit: 5
+      });
+
       const { data, error } = await supabase
         .from("linkedin_posts")
         .select(`
@@ -71,7 +89,10 @@ export default function Dashboard() {
         throw error;
       }
 
-      console.log("Fetched recent posts:", data);
+      console.log("Fetched recent posts:", {
+        count: data?.length || 0,
+        posts: data
+      });
       return data;
     },
     enabled: !!user,
