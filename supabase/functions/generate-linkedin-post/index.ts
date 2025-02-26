@@ -1,7 +1,7 @@
 
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { extractArticle } from "npm:@extractus/article-extractor";
+import ArticleExtractor from "npm:@extractus/article-extractor";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,7 +14,10 @@ serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     console.log("Handling CORS preflight request");
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { 
+      status: 200,
+      headers: corsHeaders 
+    });
   }
 
   try {
@@ -43,7 +46,7 @@ serve(async (req) => {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-        const article = await extractArticle(topic);
+        const article = await ArticleExtractor.extract(topic);
         clearTimeout(timeout);
         
         if (!article) {
@@ -93,79 +96,67 @@ Make each post unique, offering different perspectives or insights about the top
     console.log("Preparing to send request to OpenAI");
     
     // Generate content using OpenAI with timeout
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 60000); // 60 second timeout
+    const openAIResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 2500,
+      }),
+    });
 
-    try {
-      console.log("Sending request to OpenAI");
-      const openAIResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: "gpt-4o-mini",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt }
-          ],
-          temperature: 0.7,
-          max_tokens: 2500,
-        }),
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeout);
-
-      if (!openAIResponse.ok) {
-        const error = await openAIResponse.text();
-        console.error("OpenAI API error:", error);
-        throw new Error(`OpenAI API error: ${error}`);
-      }
-
-      const openAIData = await openAIResponse.json();
-      const generatedContent = openAIData.choices[0]?.message?.content;
-
-      if (!generatedContent) {
-        throw new Error('No content generated from OpenAI');
-      }
-
-      console.log("Successfully received response from OpenAI");
-
-      // Split and validate posts
-      const posts = generatedContent
-        .split(/\n{2,}/)
-        .filter(post => {
-          const wordCount = post.trim().split(/\s+/).length;
-          const hasHashtags = /#[\w-]+/.test(post);
-          const hasEmoji = /[\p{Emoji}]/u.test(post);
-          const hasQuestion = /\?/.test(post);
-          
-          return wordCount >= 300 && hasHashtags && hasEmoji && hasQuestion;
-        })
-        .map(post => post.trim());
-
-      if (posts.length === 0) {
-        console.error("Generated content failed validation:", generatedContent);
-        throw new Error('Generated content did not meet quality standards');
-      }
-
-      console.log(`Successfully generated and validated ${posts.length} posts`);
-
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          posts 
-        }), 
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      );
-    } catch (error) {
-      clearTimeout(timeout);
-      throw error;
+    if (!openAIResponse.ok) {
+      const error = await openAIResponse.text();
+      console.error("OpenAI API error:", error);
+      throw new Error(`OpenAI API error: ${error}`);
     }
+
+    const openAIData = await openAIResponse.json();
+    const generatedContent = openAIData.choices[0]?.message?.content;
+
+    if (!generatedContent) {
+      throw new Error('No content generated from OpenAI');
+    }
+
+    console.log("Successfully received response from OpenAI");
+
+    // Split and validate posts
+    const posts = generatedContent
+      .split(/\n{2,}/)
+      .filter(post => {
+        const wordCount = post.trim().split(/\s+/).length;
+        const hasHashtags = /#[\w-]+/.test(post);
+        const hasEmoji = /[\p{Emoji}]/u.test(post);
+        const hasQuestion = /\?/.test(post);
+        
+        return wordCount >= 300 && hasHashtags && hasEmoji && hasQuestion;
+      })
+      .map(post => post.trim());
+
+    if (posts.length === 0) {
+      console.error("Generated content failed validation:", generatedContent);
+      throw new Error('Generated content did not meet quality standards');
+    }
+
+    console.log(`Successfully generated and validated ${posts.length} posts`);
+
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        posts 
+      }), 
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
+    );
   } catch (error) {
     console.error("Error in generate-linkedin-post function:", error);
     return new Response(
@@ -175,7 +166,7 @@ Make each post unique, offering different perspectives or insights about the top
         timestamp: new Date().toISOString()
       }), 
       {
-        status: 500,
+        status: error.status || 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
     );
