@@ -61,10 +61,13 @@ serve(async (req) => {
     // Fetch news articles if includeNews is true
     let newsArticles = [];
     if (includeNews) {
+      console.log('Fetching related news articles...');
       newsArticles = await fetchNewsForTopic(topicContent);
+      console.log(`Found ${newsArticles.length} related news articles`);
     }
 
     // Generate posts using both the URL content and any additional news
+    console.log('Generating posts with OpenAI...');
     const posts = await generatePosts({
       topic: topicContent,
       tone,
@@ -76,7 +79,9 @@ serve(async (req) => {
       newsArticles,
     });
 
-    return new Response(JSON.stringify(posts), {
+    console.log(`Successfully generated ${posts.length} posts`);
+    
+    return new Response(JSON.stringify({ posts }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
