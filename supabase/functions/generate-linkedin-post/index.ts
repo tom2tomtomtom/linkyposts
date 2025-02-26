@@ -9,7 +9,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  console.log("Received request to generate-linkedin-post");
+  console.log("Starting generate-linkedin-post function");
 
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -18,8 +18,14 @@ serve(async (req) => {
   }
 
   try {
-    const { userId, topic, tone = "", pov = "", writingSample = "", industry = "", numPosts = 3, includeNews = true } = await req.json();
-    console.log("Request payload:", { userId, topic, tone, pov, numPosts, includeNews });
+    // Log the full request for debugging
+    console.log("Request method:", req.method);
+    console.log("Request headers:", Object.fromEntries(req.headers.entries()));
+
+    const payload = await req.json();
+    console.log("Request payload:", payload);
+
+    const { userId, topic, tone = "", pov = "", writingSample = "", industry = "", numPosts = 3, includeNews = true } = payload;
 
     if (!userId || !topic) {
       throw new Error('Missing required parameters: userId and topic are required');
@@ -33,7 +39,7 @@ serve(async (req) => {
     const isUrl = topic.startsWith('http://') || topic.startsWith('https://');
     if (isUrl) {
       try {
-        console.log("Extracting content from URL:", topic);
+        console.log("Attempting to extract content from URL:", topic);
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
@@ -46,8 +52,8 @@ serve(async (req) => {
 
         mainContent = article.title || topic;
         context = article.content || "";
-        console.log("Successfully extracted article:", {
-          title: article.title,
+        console.log("Successfully extracted article content:", {
+          title: mainContent,
           contentLength: context.length
         });
       } catch (error) {
@@ -84,13 +90,14 @@ Make each post unique, focusing on different aspects or insights from the articl
 
 Make each post unique, offering different perspectives or insights about the topic.`;
 
-    console.log("Sending prompt to OpenAI");
+    console.log("Preparing to send request to OpenAI");
     
     // Generate content using OpenAI with timeout
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 60000); // 60 second timeout
 
     try {
+      console.log("Sending request to OpenAI");
       const openAIResponse = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -124,7 +131,7 @@ Make each post unique, offering different perspectives or insights about the top
         throw new Error('No content generated from OpenAI');
       }
 
-      console.log("Successfully generated content from OpenAI");
+      console.log("Successfully received response from OpenAI");
 
       // Split and validate posts
       const posts = generatedContent
@@ -144,7 +151,7 @@ Make each post unique, offering different perspectives or insights about the top
         throw new Error('Generated content did not meet quality standards');
       }
 
-      console.log(`Successfully generated ${posts.length} valid posts`);
+      console.log(`Successfully generated and validated ${posts.length} posts`);
 
       return new Response(
         JSON.stringify({ 
@@ -174,3 +181,4 @@ Make each post unique, offering different perspectives or insights about the top
     );
   }
 });
+
