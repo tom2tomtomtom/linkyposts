@@ -1,10 +1,10 @@
 
 import React from "react";
-import { useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useNavigate, useParams } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Share2, Loader2 } from "lucide-react";
+import { Share2, Loader2, Copy, Trash2, ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -13,6 +13,8 @@ import { connectLinkedIn, publishToLinkedIn } from "@/utils/linkedinAuth";
 export default function PostDetail() {
   const { id } = useParams();
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [isPublishing, setIsPublishing] = React.useState(false);
 
   const { data: post, isLoading } = useQuery({
@@ -46,6 +48,36 @@ export default function PostDetail() {
     },
     enabled: !!user?.id
   });
+
+  const handleCopyToClipboard = async () => {
+    if (!post?.content) return;
+    try {
+      await navigator.clipboard.writeText(post.content);
+      toast.success("Post copied to clipboard");
+    } catch (error) {
+      toast.error("Failed to copy post");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!id || !user) return;
+    
+    try {
+      const { error } = await supabase
+        .from("linkedin_posts")
+        .delete()
+        .eq("id", id);
+
+      if (error) throw error;
+
+      toast.success("Post deleted successfully");
+      navigate("/posts");
+      queryClient.invalidateQueries({ queryKey: ["posts", user.id] });
+    } catch (error: any) {
+      console.error("Delete error:", error);
+      toast.error("Failed to delete post");
+    }
+  };
 
   const handlePublish = async () => {
     if (!user?.id || !post?.content) {
@@ -84,6 +116,8 @@ export default function PostDetail() {
           .eq("id", post.id);
 
         if (updateError) throw updateError;
+        
+        queryClient.invalidateQueries({ queryKey: ["post", id] });
       }
 
       toast.success("Successfully published to LinkedIn!");
@@ -115,6 +149,15 @@ export default function PostDetail() {
 
   return (
     <div className="p-6">
+      <Button
+        variant="ghost"
+        className="mb-4"
+        onClick={() => navigate("/posts")}
+      >
+        <ArrowLeft className="w-4 h-4 mr-2" />
+        Back to posts
+      </Button>
+      
       <Card className="p-6">
         <div className="flex justify-between items-start mb-6">
           <div>
@@ -123,17 +166,39 @@ export default function PostDetail() {
               <p className="text-blue-600 mb-4">{post.hook}</p>
             )}
           </div>
-          <Button
-            onClick={handlePublish}
-            disabled={isPublishing || !!post.linkedin_post_id}
-          >
-            {isPublishing ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <Share2 className="w-4 h-4 mr-2" />
-            )}
-            {post.linkedin_post_id ? "Published" : "Publish to LinkedIn"}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              onClick={handleCopyToClipboard}
+            >
+              <Copy className="w-4 h-4 mr-2" />
+              Copy
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => navigate(`/posts/${id}/edit`)}
+            >
+              Edit
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              Delete
+            </Button>
+            <Button
+              onClick={handlePublish}
+              disabled={isPublishing || !!post.linkedin_post_id}
+            >
+              {isPublishing ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Share2 className="w-4 h-4 mr-2" />
+              )}
+              {post.linkedin_post_id ? "Published" : "Publish to LinkedIn"}
+            </Button>
+          </div>
         </div>
         
         <div className="whitespace-pre-wrap">{post.content}</div>
