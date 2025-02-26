@@ -48,13 +48,24 @@ export default function PostDetail() {
   });
 
   const handlePublish = async () => {
-    if (!user?.id || !post?.content) return;
+    if (!user?.id || !post?.content) {
+      toast.error("You must be logged in and have post content to publish");
+      return;
+    }
 
     try {
       setIsPublishing(true);
       
-      // If not connected to LinkedIn, connect first
+      // If not connected to LinkedIn, initiate LinkedIn OAuth flow
       if (!linkedinToken) {
+        toast.info("Please connect your LinkedIn account first");
+        await connectLinkedIn();
+        return;
+      }
+
+      // Check if the LinkedIn token is expired
+      if (linkedinToken.expires_at && new Date(linkedinToken.expires_at) < new Date()) {
+        toast.info("LinkedIn connection expired, please reconnect");
         await connectLinkedIn();
         return;
       }
@@ -76,9 +87,9 @@ export default function PostDetail() {
       }
 
       toast.success("Successfully published to LinkedIn!");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error publishing to LinkedIn:", error);
-      toast.error("Failed to publish to LinkedIn");
+      toast.error("Failed to publish to LinkedIn. Please try reconnecting your account.");
     } finally {
       setIsPublishing(false);
     }
