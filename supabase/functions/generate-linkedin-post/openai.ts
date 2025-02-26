@@ -17,39 +17,32 @@ export async function generateAnalysis(prompt: string): Promise<string[]> {
           {
             role: "system",
             content: `You are an expert LinkedIn content strategist and thought leader who excels at:
-1. Analyzing multiple sources to form unique, well-researched opinions
-2. Creating viral, thought-provoking posts that drive meaningful engagement
-3. Connecting ideas across different sources to provide fresh insights
-4. Challenging conventional wisdom with data-backed arguments
+1. Creating engaging, substance-rich posts (minimum 300 words each)
+2. Analyzing sources to form unique, well-researched opinions
+3. Driving meaningful professional discussions
+4. Providing actionable insights for professionals
 
-Your writing style is:
-- Authoritative yet approachable
-- Research-based and analytical
-- Structured for maximum impact
-- Focused on providing unique perspectives
-- Designed to spark thoughtful discussions
+Required post structure:
+1. Attention-grabbing hook (2-3 sentences)
+2. Clear thesis statement
+3. Supporting evidence or analysis (2-3 paragraphs)
+4. Personal insights or industry implications (1-2 paragraphs)
+5. Call to action or thought-provoking question
+6. 2-3 relevant hashtags
 
-Each post must:
-1. Start with a powerful hook based on the main article
-2. Present a clear thesis/opinion supported by multiple sources
-3. Include specific examples and data points
-4. Challenge common assumptions
-5. Connect ideas across different sources
-6. Offer unique insights and practical takeaways
-7. End with a thought-provoking question or call to action
-8. Use proper spacing and formatting for readability
-9. Include 2-3 relevant emojis strategically placed
+Style guidelines:
+- Professional yet conversational tone
+- Use clear paragraph breaks for readability
+- Include specific examples and data points
+- Incorporate emoji strategically (2-3 per post)
+- Keep paragraphs focused and concise (3-5 sentences each)
 
-Structure each post with:
-- Opening hook (1-2 sentences)
-- Main insight/opinion (2-3 sentences)
-- Supporting evidence from sources (2-3 paragraphs)
-- Counter-arguments or nuanced perspective (1 paragraph)
-- Personal/professional experience or example (1 paragraph)
-- Action-oriented conclusion (1-2 sentences)
-- Engaging question or call to action
-
-Remember: Your goal is to demonstrate thought leadership by synthesizing information from multiple sources into valuable insights for your audience.`
+Each post MUST:
+- Be at least 300 words
+- Contain at least 4 distinct paragraphs
+- Include both analysis and practical takeaways
+- End with an engaging question or call to action
+- Use professional language suitable for LinkedIn`
           },
           {
             role: "user",
@@ -57,7 +50,7 @@ Remember: Your goal is to demonstrate thought leadership by synthesizing informa
           }
         ],
         temperature: 0.7,
-        max_tokens: 2000,
+        max_tokens: 2500,
         presence_penalty: 0.6,
         frequency_penalty: 0.8
       })
@@ -83,17 +76,28 @@ Remember: Your goal is to demonstrate thought leadership by synthesizing informa
       .filter(post => post.trim().length > 0)
       .map(post => post.trim());
 
-    // Validate post length and structure
+    // Enhanced validation for post quality
     const validatedPosts = posts.filter(post => {
+      const wordCount = post.split(/\s+/).length;
       const paragraphs = post.split(/\n/).filter(p => p.trim().length > 0);
-      return paragraphs.length >= 3 && post.length >= 100;
+      const hasHashtags = /#[a-zA-Z0-9]+/.test(post);
+      const hasEmoji = /[\p{Emoji}]/u.test(post);
+      
+      return (
+        wordCount >= 300 && // Minimum word count
+        paragraphs.length >= 4 && // Minimum paragraph count
+        hasHashtags && // Must include hashtags
+        hasEmoji && // Must include emoji
+        post.includes("?") // Must include at least one question
+      );
     });
 
     if (validatedPosts.length === 0) {
-      throw new Error("Generated content did not meet quality standards");
+      console.error("Posts failed validation. Raw content:", content);
+      throw new Error("Generated content did not meet quality standards. Please try again.");
     }
 
-    console.log(`Generated ${validatedPosts.length} valid posts`);
+    console.log(`Generated ${validatedPosts.length} valid posts meeting all quality criteria`);
     return validatedPosts;
   } catch (error) {
     console.error("OpenAI API error:", error);
