@@ -1,6 +1,6 @@
 
 import React from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -23,6 +23,7 @@ type PostStatus = "all" | "draft" | "scheduled" | "published";
 export default function Posts() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
   const filterFromUrl = searchParams.get("filter") as PostStatus | null;
   const [selectedStatus, setSelectedStatus] = React.useState<PostStatus>(filterFromUrl || "all");
@@ -78,8 +79,11 @@ export default function Posts() {
 
       if (error) throw error;
 
+      // Invalidate the query to refresh the posts list
+      queryClient.invalidateQueries({ queryKey: ["posts", user?.id, selectedStatus] });
       toast.success("Post deleted successfully");
     } catch (error) {
+      console.error("Delete error:", error);
       toast.error("Failed to delete post");
     }
   };
@@ -236,3 +240,4 @@ export default function Posts() {
     </div>
   );
 }
+

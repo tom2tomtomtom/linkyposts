@@ -20,25 +20,42 @@ serve(async (req) => {
       throw new Error('OpenAI API key not found');
     }
 
-    const systemPrompt = `You are a professional LinkedIn content creator. Generate engaging, authentic posts that match the user's writing style and preferences. Each post should be concise, engaging, and follow LinkedIn best practices.`;
+    const systemPrompt = `You are a professional LinkedIn content creator specializing in crafting highly engaging, authentic posts. Your expertise lies in writing content that drives engagement and sparks meaningful conversations.
 
-    const userPrompt = `Generate ${numPosts} LinkedIn ${numPosts > 1 ? 'posts' : 'post'} about "${topic}" with the following specifications:
-    - Tone: ${tone || 'professional'}
-    - Point of View: ${pov || 'first person'}
-    - Industry: ${industry || 'general'}
-    - Match this writing style: ${writingSample || 'professional and engaging'}
-    ${includeNews ? '- Include recent industry trends or news if relevant' : ''}
-    
-    Format the response as a JSON array of post objects with the following structure:
+Key guidelines:
+- Write in a conversational yet professional tone
+- Include specific examples and personal insights
+- Focus on providing value through actionable insights
+- Use short paragraphs and clear formatting
+- Avoid generic advice or clichéd business speak
+- Create content that encourages discussion and sharing`;
+
+    const userPrompt = `Generate ${numPosts} LinkedIn ${numPosts > 1 ? 'posts' : 'post'} about "${topic}" with these specifications:
+- Tone: ${tone || 'professional and authentic'}
+- Point of View: ${pov || 'first person'}
+- Industry Focus: ${industry || 'general business'}
+- Writing Style: ${writingSample ? `Match this style: ${writingSample}` : 'Clear, engaging, and conversational'}
+${includeNews ? '- Include relevant industry insights or trends' : ''}
+
+Make each post:
+1. Start with a hook that grabs attention
+2. Share specific experiences or insights
+3. Include practical takeaways
+4. End with a thought-provoking question or call to action
+5. Keep length between 800-1200 characters
+
+Format as JSON:
+{
+  "posts": [
     {
-      "posts": [
-        {
-          "content": "post content here",
-          "hashtags": ["relevant", "hashtags", "here"],
-          "topic": "specific topic or theme"
-        }
-      ]
-    }`;
+      "content": "post content here",
+      "hashtags": ["relevant", "hashtags"],
+      "topic": "specific theme"
+    }
+  ]
+}`;
+
+    console.log('Sending request to OpenAI with prompts:', { systemPrompt, userPrompt });
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -52,19 +69,23 @@ serve(async (req) => {
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
-        temperature: 0.7
+        temperature: 0.7,
+        response_format: { type: "json_object" }
       }),
     });
 
     if (!response.ok) {
       const error = await response.text();
+      console.error('OpenAI API error:', error);
       throw new Error(`OpenAI API error: ${error}`);
     }
 
     const data = await response.json();
-    const parsedContent = JSON.parse(data.choices[0].message.content);
+    const generatedContent = JSON.parse(data.choices[0].message.content);
 
-    return new Response(JSON.stringify(parsedContent), {
+    console.log('Successfully generated content:', generatedContent);
+
+    return new Response(JSON.stringify(generatedContent), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
