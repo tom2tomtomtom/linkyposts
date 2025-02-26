@@ -122,8 +122,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
+            scope: 'https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile',
           },
-          redirectTo: `${window.location.origin}/auth/callback`
+          redirectTo: window.location.origin + '/auth/callback'
         }
       });
       
