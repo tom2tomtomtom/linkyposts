@@ -8,7 +8,6 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -20,16 +19,6 @@ serve(async (req) => {
     if (!openAIApiKey) {
       throw new Error('OpenAI API key not found');
     }
-
-    console.log('Generating LinkedIn posts with parameters:', {
-      topic,
-      tone,
-      pov,
-      industry,
-      numPosts,
-      includeNews,
-      hasWritingSample: !!writingSample,
-    });
 
     const systemPrompt = `You are a professional LinkedIn content creator. Generate engaging, authentic posts that match the user's writing style and preferences. Each post should be concise, engaging, and follow LinkedIn best practices.`;
 
@@ -58,58 +47,33 @@ serve(async (req) => {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-4o',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
         temperature: 0.7,
+        response_format: { type: "json_object" }
       }),
     });
 
     if (!response.ok) {
       const error = await response.text();
-      console.error('OpenAI API error:', error);
       throw new Error(`OpenAI API error: ${error}`);
     }
 
     const data = await response.json();
-    console.log('OpenAI response received:', data);
+    const parsedContent = JSON.parse(data.choices[0].message.content);
 
-    const generatedContent = data.choices[0].message.content;
-    console.log('Generated content:', generatedContent);
-
-    let parsedContent;
-    try {
-      parsedContent = JSON.parse(generatedContent);
-      
-      // Validate the structure
-      if (!Array.isArray(parsedContent.posts)) {
-        throw new Error('Generated content does not contain a posts array');
-      }
-
-      console.log('Successfully parsed content:', parsedContent);
-      
-      return new Response(JSON.stringify(parsedContent), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    } catch (parseError) {
-      console.error('Error parsing generated content:', parseError);
-      console.log('Raw content that failed to parse:', generatedContent);
-      throw new Error('Failed to parse generated content: ' + parseError.message);
-    }
+    return new Response(JSON.stringify(parsedContent), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
 
   } catch (error) {
     console.error('Error in generate-linkedin-post function:', error);
-    return new Response(
-      JSON.stringify({ 
-        error: error.message,
-        details: error.stack 
-      }), 
-      {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      }
-    );
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 });
