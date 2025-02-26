@@ -8,13 +8,12 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const { content, userId, linkedinUserId } = await req.json()
+    const { content, userId } = await req.json()
     
     // Create Supabase client
     const supabaseClient = createClient(
@@ -38,66 +37,52 @@ serve(async (req) => {
       throw new Error('LinkedIn token expired')
     }
 
-    console.log('Publishing to LinkedIn with token:', { userId, hasToken: !!tokenData.access_token });
-
-    // Format the request body according to LinkedIn v2 Share API
-    const shareRequest = {
-      author: `urn:li:person:${linkedinUserId}`,
-      lifecycleState: 'PUBLISHED',
-      specificContent: {
-        'com.linkedin.ugc.ShareContent': {
-          shareCommentary: {
-            text: content
-          },
-          shareMediaCategory: 'NONE'
-        }
-      },
-      visibility: {
-        'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC'
-      }
-    };
-
-    // Post to LinkedIn v2 Share API
+    // Post to LinkedIn
     const response = await fetch('https://api.linkedin.com/v2/ugcPosts', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${tokenData.access_token}`,
         'Content-Type': 'application/json',
-        'X-Restli-Protocol-Version': '2.0.0',
       },
-      body: JSON.stringify(shareRequest)
-    });
-
-    const responseData = await response.json();
+      body: JSON.stringify({
+        author: `urn:li:person:${userId}`,
+        lifecycleState: 'PUBLISHED',
+        specificContent: {
+          'com.linkedin.ugc.ShareContent': {
+            shareCommentary: {
+              text: content
+            },
+            shareMediaCategory: 'NONE'
+          }
+        },
+        visibility: {
+          'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC'
+        }
+      })
+    })
 
     if (!response.ok) {
-      console.error('LinkedIn API error:', responseData);
-      throw new Error(`LinkedIn API error: ${JSON.stringify(responseData)}`);
+      const errorData = await response.json()
+      throw new Error(`LinkedIn API error: ${JSON.stringify(errorData)}`)
     }
 
-    console.log('LinkedIn post created:', responseData);
+    const linkedinResponse = await response.json()
 
     return new Response(
-      JSON.stringify({ 
-        success: true, 
-        postId: responseData.id,
-        responseData 
-      }),
+      JSON.stringify({ success: true, postId: linkedinResponse.id }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200 
       }
-    );
+    )
 
   } catch (error) {
-    console.error('Error in publish-to-linkedin function:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 400 
       }
-    );
+    )
   }
-});
-
+})

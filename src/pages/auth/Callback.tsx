@@ -10,12 +10,14 @@ export default function Callback() {
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
+        // Log the full URL for debugging
         console.log('Auth callback triggered', {
           fullUrl: window.location.href,
           search: window.location.search,
           hash: window.location.hash
         });
         
+        // Get error from URL if present
         const params = new URLSearchParams(window.location.search);
         const errorParam = params.get('error');
         const errorDescription = params.get('error_description');
@@ -31,8 +33,7 @@ export default function Callback() {
           error,
           userId: session?.user?.id,
           accessToken: !!session?.access_token,
-          provider: session?.user?.app_metadata?.provider,
-          providerToken: !!session?.provider_token
+          provider: session?.user?.app_metadata?.provider
         });
         
         if (error) {
@@ -44,22 +45,8 @@ export default function Callback() {
           console.error('No session found in callback');
           throw new Error('No session found');
         }
-
-        // Store LinkedIn token if this is a LinkedIn login
-        if (session.provider_token && session.user?.app_metadata?.provider === 'linkedin_oidc') {
-          const { error: tokenError } = await supabase
-            .from('linkedin_auth_tokens')
-            .upsert({
-              user_id: session.user.id,
-              access_token: session.provider_token,
-              expires_at: new Date(Date.now() + (session.expires_in || 3600) * 1000).toISOString()
-            });
-
-          if (tokenError) {
-            console.error('Error storing LinkedIn token:', tokenError);
-          }
-        }
         
+        // Log successful authentication
         console.log('Authentication successful, redirecting to dashboard');
         toast.success('Successfully signed in!');
         navigate('/dashboard');

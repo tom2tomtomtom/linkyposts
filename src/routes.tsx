@@ -11,7 +11,6 @@ import Dashboard from "@/pages/dashboard";
 import Posts from "@/pages/posts";
 import GeneratePost from "@/pages/posts/generate";
 import PostDetail from "@/pages/posts/[id]";
-import EditPost from "@/pages/posts/edit/[id]";
 import Settings from "@/pages/settings";
 
 function ProtectedRoute() {
@@ -110,10 +109,6 @@ export const router = createBrowserRouter([
               {
                 path: "posts/:id",
                 element: <PostDetail />
-              },
-              {
-                path: "posts/:id/edit",
-                element: <EditPost />
               },
               {
                 path: "settings",

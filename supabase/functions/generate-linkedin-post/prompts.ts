@@ -1,60 +1,88 @@
 
-import { PostGenInput } from "./types.ts";
+export function createSystemPrompt(): string {
+  return `You are an expert LinkedIn content creator specializing in provocative, data-driven posts.
+Your primary goal is to create ATTENTION-GRABBING HOOKS that generate immediate intellectual tension or curiosity.
+You excel at turning data points into provocative statements that make readers stop scrolling.
 
-export function generatePersonaPrompt(input: PostGenInput): string {
-  return `Analyze this writing sample and describe the writing style, tone, and unique characteristics:
+Today's date is ${new Date().toDateString()}.
 
-${input.writingSample}
+HOOK CREATION RULES:
+1. ALWAYS start with a surprising statistic or counterintuitive fact
+2. Use specific numbers and percentages to create credibility
+3. Challenge common assumptions with data
+4. Create tension between expectations and reality
+5. Use time-sensitive language ("just released", "new study shows", "breaking:")
 
-Focus on:
-1. Vocabulary level and complexity
-2. Sentence structure and length
-3. Use of industry jargon
-4. Overall tone and personality
-5. Common phrases or writing patterns
+HOOK PATTERNS TO USE:
+- "X% of [industry] leaders are wrong about [topic], according to [source]..."
+- "While everyone focuses on [common trend], [unexpected data] shows the opposite..."
+- "New research destroys the myth that [common belief]..."
+- "The top [number]% of [professionals] do [unexpected action], here's why..."
+- "[Big number] [industry] professionals made this mistake in 2024..."
 
-Provide a concise summary that can be used to match this style.`;
+CRITICAL REQUIREMENTS:
+1. Every post MUST begin with a specific statistic or data point
+2. Always cite sources with actual dates
+3. Focus on surprising findings or counterintuitive data
+4. Create immediate tension in the first sentence
+5. Make the hook relevant to the target industry`;
 }
 
-export function generatePostPrompt(input: PostGenInput & { persona?: string }): string {
-  const {
-    topic,
-    tone = "professional",
-    pov = "first person",
-    industry,
-    numPosts = 1,
-    includeNews = true,
-    persona = "",
-    news = []
-  } = input;
+export function createUserPrompt(
+  topic: string,
+  tone: string,
+  pov: string,
+  industry: string,
+  numPosts: number,
+  recentNews: NewsArticle[],
+  writingSample?: string
+): string {
+  let prompt = `Generate ${numPosts} LinkedIn posts about "${topic}" that will STOP THE SCROLL.
+Write with a "${tone}" tone from a "${pov}" perspective for a ${industry} professional.
 
-  return `Create ${numPosts} engaging LinkedIn post${numPosts > 1 ? 's' : ''} about ${topic}.
+HOOK REQUIREMENTS:
+1. Start each post with a PROVOCATIVE HOOK using specific numbers/data
+2. Create immediate intellectual tension in the first sentence
+3. Challenge common industry assumptions with data
+4. Use time-sensitive language to create urgency
+5. Connect the hook directly to ${industry} professionals' interests`;
 
-Key requirements:
-- Write naturally without any markdown or formatting
-- Don't use asterisks, underscores, or special characters for emphasis
-- Each post should have a compelling hook
-- Include relevant hashtags (without the # symbol in the post content)
-- Keep posts between 800-1200 characters
+  if (recentNews.length > 0) {
+    prompt += `\n\nLEVERAGE THESE NEWS ITEMS (extract specific statistics and surprising facts):`;
+    
+    recentNews.forEach((article, index) => {
+      prompt += `\n${index + 1}. "${article.title}" (${new Date(article.publishedDate).toDateString()})
+      Key points: ${article.snippet || 'No snippet available'}
+      URL: ${article.url}
+      Extract the most surprising statistics or findings from this article.`;
+    });
+  }
 
-Style guide:
-- Tone: ${tone}
-- Point of view: ${pov}
-- Industry focus: ${industry}
-${persona ? `- Match this writing style: ${persona}` : ''}
+  if (writingSample) {
+    prompt += `\n\nAFTER THE HOOK, match this writing style:\n"${writingSample}"`;
+  }
 
-${includeNews && news.length > 0 ? `
-Reference these recent developments:
-${news.map(n => `- ${n.title}`).join('\n')}
-` : ''}
+  prompt += `\n\nFormat each post as a JSON object with:
+  {
+    "posts": [
+      {
+        "hook": "The attention-grabbing first sentence with specific data",
+        "content": "Full post starting with the hook",
+        "topic": "Specific aspect of the main topic",
+        "facts": [{"fact": "...", "source": "...", "date": "..."}],
+        "hashtags": ["relevant", "hashtags"],
+        "sources": [{"title": "...", "url": "...", "publication_date": "..."}]
+      }
+    ]
+  }`;
 
-Return response as a JSON array with each post having:
-{
-  "content": "the post content",
-  "hook": "attention-grabbing first line",
-  "hashtags": ["relevant", "hashtags"]
+  return prompt;
 }
 
-Make sure the JSON is valid and doesn't include any markdown characters.`;
+export interface NewsArticle {
+  title: string;
+  url: string;
+  publishedDate: string;
+  snippet?: string;
+  source: string;
 }
-
