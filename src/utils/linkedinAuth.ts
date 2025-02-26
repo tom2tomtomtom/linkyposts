@@ -6,7 +6,7 @@ export async function connectLinkedIn() {
     provider: 'linkedin_oidc',
     options: {
       scopes: 'r_liteprofile r_emailaddress w_member_social',
-      redirectTo: `${window.location.origin}/dashboard`
+      redirectTo: `${window.location.origin}/auth/callback`
     }
   });
 
