@@ -51,11 +51,13 @@ export default function PostDetail() {
       return data as Post;
     },
     enabled: !!user && !!id,
-    onSuccess: (data) => {
-      setContent(data.content);
-      setTopic(data.topic || "");
-      setHashtags(data.hashtags?.join(" ") || "");
-    },
+    meta: {
+      onSuccess: (data: Post) => {
+        setContent(data.content);
+        setTopic(data.topic || "");
+        setHashtags(data.hashtags?.join(" ") || "");
+      }
+    }
   });
 
   const updateMutation = useMutation({
