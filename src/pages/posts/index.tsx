@@ -1,4 +1,3 @@
-
 import React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -34,9 +33,10 @@ export default function Posts() {
     }
   }, [filterFromUrl]);
 
-  const { data: posts, isLoading } = useQuery({
+  const { data: posts, isLoading, error } = useQuery({
     queryKey: ["posts", user?.id, selectedStatus],
     queryFn: async () => {
+      console.log("Fetching posts for user:", user?.id, "with status:", selectedStatus);
       if (!user) throw new Error("No user");
 
       let query = supabase
@@ -55,7 +55,13 @@ export default function Posts() {
       }
 
       const { data, error } = await query;
-      if (error) throw error;
+      
+      if (error) {
+        console.error("Supabase query error:", error);
+        throw error;
+      }
+      
+      console.log("Fetched posts:", data);
       return data as Post[];
     },
     enabled: !!user,
@@ -79,7 +85,6 @@ export default function Posts() {
 
       if (error) throw error;
 
-      // Invalidate the query to refresh the posts list
       queryClient.invalidateQueries({ queryKey: ["posts", user?.id, selectedStatus] });
       toast.success("Post deleted successfully");
     } catch (error) {
@@ -129,6 +134,10 @@ export default function Posts() {
     }).format(date);
   };
 
+  if (error) {
+    console.error("Posts query error:", error);
+  }
+
   return (
     <div className="min-h-screen bg-secondary p-6">
       <div className="max-w-7xl mx-auto">
@@ -166,7 +175,13 @@ export default function Posts() {
           </Button>
         </div>
 
-        {isLoading ? (
+        {error ? (
+          <Card className="p-6">
+            <div className="text-center text-red-600 py-8">
+              Error loading posts. Please try again.
+            </div>
+          </Card>
+        ) : isLoading ? (
           <Card className="p-6">
             <div className="text-center text-muted-foreground py-8">
               Loading posts...
@@ -240,4 +255,3 @@ export default function Posts() {
     </div>
   );
 }
-
