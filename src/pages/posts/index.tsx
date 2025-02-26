@@ -112,6 +112,19 @@ export default function Posts() {
     }
   };
 
+  const formatScheduledDateTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: 'numeric',
+      timeZoneName: 'short'
+    }).format(date);
+  };
+
   return (
     <div className="min-h-screen bg-secondary p-6">
       <div className="max-w-7xl mx-auto">
@@ -176,6 +189,12 @@ export default function Posts() {
                             {getStatusIcon(status)}
                             {status}
                           </span>
+                          {post.scheduled_for && (
+                            <span className="text-sm flex items-center gap-1 text-blue-600">
+                              <CalendarClock className="w-4 h-4" />
+                              {formatScheduledDateTime(post.scheduled_for)}
+                            </span>
+                          )}
                           {post.topic && (
                             <span className="text-sm text-muted-foreground">
                               • {post.topic}
