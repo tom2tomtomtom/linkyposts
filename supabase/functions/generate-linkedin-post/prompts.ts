@@ -1,48 +1,58 @@
 
-interface PromptParams {
+export function buildPrompt(params: {
   topic: string;
+  articleContent?: string;
+  articleTitle?: string;
   tone: string;
   pov: string;
-  writingSample?: string;
   industry?: string;
-  additionalContext?: string;
-  newsArticles?: any[];
-}
+  writingSample?: string;
+}): string {
+  const {
+    topic,
+    articleContent,
+    articleTitle,
+    tone,
+    pov,
+    industry,
+    writingSample,
+  } = params;
 
-export function generatePrompt({
-  topic,
-  tone,
-  pov,
-  writingSample,
-  industry,
-  additionalContext,
-  newsArticles = [],
-}: PromptParams): string {
-  let prompt = `Write ${newsArticles.length > 1 ? 'multiple engaging' : 'an engaging'} LinkedIn post${newsArticles.length > 1 ? 's' : ''} about ${topic}.`;
+  let prompt = "";
 
-  if (additionalContext) {
-    prompt += `\n\nUse this article content as context:\n${additionalContext}`;
+  if (articleContent && articleTitle) {
+    prompt = `Write a LinkedIn post about this article titled "${articleTitle}":
+
+${articleContent}
+
+Key requirements:
+- Write a thoughtful, engaging LinkedIn post discussing the key points and adding professional insights
+- Use a ${tone} tone
+- Write in ${pov} perspective
+- Make it substantial (4-8 paragraphs)
+- Include personal insights and experiences
+- End with a thought-provoking question or call to action
+`;
+  } else {
+    prompt = `Write a LinkedIn post about this topic: ${topic}
+
+Key requirements:
+- Write a thoughtful, engaging LinkedIn post that explores this topic in depth
+- Use a ${tone} tone
+- Write in ${pov} perspective
+- Make it substantial (4-8 paragraphs)
+- Include personal insights and experiences
+- End with a thought-provoking question or call to action
+`;
   }
 
   if (industry) {
-    prompt += `\n\nTarget audience: Professionals in the ${industry} industry.`;
+    prompt += `\n- Add relevant context for the ${industry} industry`;
   }
-
-  prompt += `\n\nUse a ${tone} tone and write in the ${pov} point of view.`;
 
   if (writingSample) {
-    prompt += `\n\nMatch this writing style:\n${writingSample}`;
+    prompt += `\n\nPlease match this writing style:\n${writingSample}`;
   }
-
-  if (newsArticles.length > 0) {
-    prompt += "\n\nIncorporate insights from these related articles:";
-    newsArticles.forEach((article) => {
-      prompt += `\n- ${article.title}`;
-      if (article.description) prompt += `\n  ${article.description}`;
-    });
-  }
-
-  prompt += "\n\nFormat each post using ===POST=== as a separator and include relevant hashtags after ===HASHTAGS=== for each post.";
 
   return prompt;
 }
