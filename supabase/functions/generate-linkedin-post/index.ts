@@ -75,7 +75,23 @@ serve(async (req) => {
     - Have a strong hook in the first line
     - Include a call to action
     - Be formatted with clear paragraphs
-    - Match the writing style from the sample if provided`;
+    - Match the writing style from the sample if provided
+    
+    Format your response as a JSON object with:
+    {
+      "posts": [
+        {
+          "content": "the post content",
+          "topic": "main topic",
+          "hashtags": ["hashtag1", "hashtag2"]
+        }
+      ],
+      "styleAnalysis": {
+        "tone": "analysis of tone used",
+        "structure": "analysis of post structure",
+        "engagement": "potential engagement factors"
+      }
+    }`;
 
     // Create the user prompt including news articles if available
     let userPrompt = `Write ${numPosts} LinkedIn posts about ${topic}. Industry: ${industry}.`;
@@ -100,6 +116,8 @@ serve(async (req) => {
 
     // Save posts to the database
     const savedPosts = [];
+    const versionGroup = crypto.randomUUID();
+
     for (const post of content.posts) {
       try {
         const { data, error } = await supabase
@@ -109,7 +127,7 @@ serve(async (req) => {
             content: post.content,
             topic: post.topic,
             hashtags: post.hashtags,
-            version_group: crypto.randomUUID(),
+            version_group: versionGroup,
             is_current_version: true,
           })
           .select()
@@ -118,16 +136,34 @@ serve(async (req) => {
         if (error) throw error;
         savedPosts.push(data);
 
+        // Save style analysis if available
+        if (content.styleAnalysis) {
+          const { error: contentError } = await supabase
+            .from('generated_content')
+            .insert({
+              user_id: userId,
+              topic,
+              tone,
+              pov,
+              writing_sample: writingSample,
+              style_analysis: content.styleAnalysis,
+            });
+
+          if (contentError) {
+            console.error("Error saving style analysis:", contentError);
+          }
+        }
+
         // Save post sources if available
-        if (post.sources && post.sources.length > 0) {
+        if (newsArticles.length > 0) {
           const { error: sourcesError } = await supabase
             .from('post_sources')
             .insert(
-              post.sources.map(source => ({
+              newsArticles.map(article => ({
                 linkedin_post_id: data.id,
-                title: source.title,
-                url: source.url,
-                publication_date: source.publication_date
+                title: article.title,
+                url: article.url,
+                publication_date: article.published_date
               }))
             );
           if (sourcesError) {
@@ -171,3 +207,4 @@ serve(async (req) => {
     );
   }
 });
+

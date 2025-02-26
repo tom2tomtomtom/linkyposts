@@ -1,6 +1,4 @@
 
-import { AIResponse } from './types.ts';
-
 export async function generateContent(
   openAIApiKey: string,
   systemPrompt: string,
@@ -10,10 +8,10 @@ export async function generateContent(
   
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
-    headers: new Headers({
+    headers: {
       'Authorization': `Bearer ${openAIApiKey}`,
       'Content-Type': 'application/json'
-    }),
+    },
     body: JSON.stringify({
       model: 'gpt-4o',
       messages: [
@@ -31,5 +29,9 @@ export async function generateContent(
   }
 
   const completion = await response.json();
-  return JSON.parse(completion.choices[0]?.message?.content || '{"posts":[], "styleAnalysis":{}}');
+  const parsedContent = JSON.parse(completion.choices[0]?.message?.content || '{"posts":[], "styleAnalysis":{}}');
+  
+  console.log('Generated content successfully:', parsedContent);
+  return parsedContent;
 }
+
