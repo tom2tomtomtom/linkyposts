@@ -12,7 +12,6 @@ type AuthContextType = {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -116,34 +115,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signInWithGoogle = async () => {
-    console.log('Initiating Google sign in...');
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
-          redirectTo: `${window.location.origin}/auth/callback`
-        }
-      });
-      
-      if (error) {
-        console.error('Google sign in error:', error);
-        toast.error('Failed to sign in with Google');
-        throw error;
-      }
-      
-      console.log('Google sign in initiated successfully');
-    } catch (error: any) {
-      console.error('Google sign in error:', error);
-      toast.error(error.message || 'Failed to sign in with Google');
-      throw error;
-    }
-  };
-
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -162,7 +133,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signIn,
       signUp,
       signOut,
-      signInWithGoogle,
     }}>
       {children}
     </AuthContext.Provider>
@@ -176,4 +146,3 @@ export function useAuth() {
   }
   return context;
 }
-
