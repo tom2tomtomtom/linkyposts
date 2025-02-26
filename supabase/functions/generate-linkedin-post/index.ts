@@ -82,7 +82,7 @@ serve(async (req) => {
     let newsArticles = [];
     if (includeNews) {
       console.log('Fetching related news articles...');
-      newsArticles = await fetchNewsForTopic(topicContent);
+      newsArticles = await fetchNewsForTopic(topicContent, industry);
       console.log(`Found ${newsArticles.length} related news articles`);
     }
 
@@ -113,4 +113,3 @@ serve(async (req) => {
     });
   }
 });
-
