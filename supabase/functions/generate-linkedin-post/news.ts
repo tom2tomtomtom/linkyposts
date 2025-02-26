@@ -12,6 +12,11 @@ export async function extractArticleContent(url: string): Promise<Article | null
   console.log("Attempting to extract content from URL:", url);
   try {
     const response = await fetch(url);
+    if (!response.ok) {
+      console.error("Failed to fetch URL:", url, "Status:", response.status);
+      throw new Error(`Failed to fetch URL: ${response.status}`);
+    }
+    
     const html = await response.text();
     console.log("Successfully fetched HTML content");
 
@@ -29,12 +34,15 @@ export async function extractArticleContent(url: string): Promise<Article | null
     // Try different content selectors
     const possibleContentSelectors = [
       'article',
+      '[role="article"]',
       '.article-content',
       '.post-content',
       'main',
       '[role="main"]',
       '.content',
-      '#content'
+      '#content',
+      '.entry-content',
+      '.post-body'
     ];
 
     for (const selector of possibleContentSelectors) {
@@ -45,7 +53,7 @@ export async function extractArticleContent(url: string): Promise<Article | null
       }
     }
 
-    // If no content found, try paragraphs
+    // If no content found through selectors, try paragraphs
     if (!content) {
       content = $('p').map((_, el) => $(el).text().trim()).get().join('\n\n');
     }
@@ -56,6 +64,11 @@ export async function extractArticleContent(url: string): Promise<Article | null
       .replace(/\n\s*\n/g, '\n\n')
       .trim();
 
+    if (!content || content.length < 100) {
+      console.error("Insufficient content extracted:", { contentLength: content.length });
+      throw new Error('Insufficient content extracted from URL');
+    }
+
     console.log("Successfully extracted content:", {
       titleLength: title?.length,
       contentLength: content?.length
@@ -63,12 +76,12 @@ export async function extractArticleContent(url: string): Promise<Article | null
 
     return {
       title: title || 'Untitled Article',
-      content: content || 'No content found',
-      url: url
+      content,
+      url
     };
   } catch (error) {
     console.error("Error extracting content:", error);
-    throw new Error(`Failed to extract content: ${error.message}`);
+    throw error;
   }
 }
 
@@ -91,15 +104,21 @@ export async function findRelatedArticles(topic: string): Promise<Article[]> {
       }
     });
 
+    if (!response.ok) {
+      console.error("News API error:", response.status, await response.text());
+      return [];
+    }
+
     const data = await response.json();
     console.log("News API response:", {
       status: data.status,
-      totalResults: data.totalResults
+      totalResults: data.totalResults,
+      articlesFound: data.articles?.length || 0
     });
 
     if (data.status === 'ok' && data.articles) {
       return data.articles.map((article: any) => ({
-        title: article.title,
+        title: article.title || '',
         content: article.description || article.content || '',
         url: article.url,
         publishedDate: article.publishedAt

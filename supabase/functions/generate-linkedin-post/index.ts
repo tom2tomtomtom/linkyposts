@@ -17,13 +17,36 @@ serve(async (req) => {
   }
 
   try {
-    const { userId, topic, tone = "", pov = "", writingSample = "", industry = "", numPosts = 3, includeNews = true } = await req.json();
+    // Validate request body
+    const body = await req.json().catch(() => null);
+    console.log("Received request body:", body);
 
-    if (!userId || !topic) {
+    if (!body || !body.userId || !body.topic) {
+      console.error("Missing required parameters:", { body });
       throw new Error('Missing required parameters: userId and topic are required');
     }
 
-    console.log("Received request with params:", { userId, topic, tone, pov, numPosts, includeNews });
+    const { 
+      userId, 
+      topic, 
+      tone = "", 
+      pov = "", 
+      writingSample = "", 
+      industry = "", 
+      numPosts = 3, 
+      includeNews = true 
+    } = body;
+
+    console.log("Processing request with params:", {
+      userId,
+      topic,
+      tone,
+      pov,
+      writingSample: writingSample ? "provided" : "not provided",
+      industry,
+      numPosts,
+      includeNews
+    });
 
     let mainArticle = null;
     let relatedArticles = [];
@@ -31,34 +54,46 @@ serve(async (req) => {
     // Check if the topic is a URL
     const isUrl = topic.startsWith('http://') || topic.startsWith('https://');
     if (isUrl) {
-      console.log("Topic is a URL, fetching article content...");
-      mainArticle = await extractArticleContent(topic);
-      
-      if (!mainArticle) {
-        throw new Error('Failed to extract article content');
-      }
+      console.log("Topic is a URL, attempting to extract content...");
+      try {
+        mainArticle = await extractArticleContent(topic);
+        if (!mainArticle) {
+          console.error("Failed to extract article content from URL:", topic);
+          throw new Error('Failed to extract article content');
+        }
+        console.log("Successfully extracted article content:", {
+          title: mainArticle.title,
+          contentLength: mainArticle.content.length,
+          url: mainArticle.url
+        });
 
-      console.log("Main article extracted:", {
-        title: mainArticle.title,
-        contentLength: mainArticle.content.length,
-        url: mainArticle.url
-      });
-
-      if (includeNews) {
-        relatedArticles = await findRelatedArticles(mainArticle.title);
-        console.log(`Found ${relatedArticles.length} related articles`);
+        if (includeNews) {
+          console.log("Fetching related articles...");
+          relatedArticles = await findRelatedArticles(mainArticle.title);
+          console.log(`Found ${relatedArticles.length} related articles`);
+        }
+      } catch (error) {
+        console.error("Error processing article URL:", error);
+        throw new Error(`Failed to process article: ${error.message}`);
       }
     }
 
+    // Initialize Supabase client
+    console.log("Initializing Supabase client...");
     const supabase = createDbClient();
 
     // Get user preferences
     console.log("Fetching user preferences for userId:", userId);
-    const { data: preferences } = await supabase
+    const { data: preferences, error: preferencesError } = await supabase
       .from('user_preferences')
       .select('*')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
+
+    if (preferencesError) {
+      console.error("Error fetching user preferences:", preferencesError);
+      throw preferencesError;
+    }
 
     console.log("User preferences:", preferences);
 
@@ -66,50 +101,28 @@ serve(async (req) => {
     const defaultPov = pov || preferences?.default_pov || 'first person';
     const userIndustry = industry || preferences?.industry || '';
 
-    let prompt = `Generate ${numPosts} unique LinkedIn posts`;
-
-    if (mainArticle) {
-      prompt += `\n\nMain Article Analysis:\nTitle: ${mainArticle.title}\nURL: ${mainArticle.url}\nContent: ${mainArticle.content}\n\n`;
-      
-      if (relatedArticles.length > 0) {
-        prompt += "\nRelated Articles for Context:\n";
-        relatedArticles.forEach((article, index) => {
-          prompt += `\nArticle ${index + 1}:\nTitle: ${article.title}\nURL: ${article.url}\nKey Points: ${article.content.slice(0, 500)}...\n`;
-        });
-      }
-      
-      prompt += `\nUsing the main article as your primary source and the related articles for additional context:
-1. Analyze the key points and insights
-2. Form a unique, well-researched opinion
-3. Connect ideas across the different sources
-4. Challenge conventional thinking with evidence
-5. Provide actionable takeaways for the readers`;
-    } else {
-      prompt += ` about ${topic}.`;
-    }
-
-    prompt += `\nTone: ${defaultTone}`;
-    prompt += `\nPoint of View: ${defaultPov}`;
-    if (userIndustry) prompt += `\nIndustry Context: ${userIndustry}`;
-    if (writingSample) prompt += `\nMatch this writing style: ${writingSample}`;
-
-    console.log("Generating posts with configuration:", {
+    console.log("Starting content generation with settings:", {
+      defaultTone,
+      defaultPov,
+      userIndustry,
       hasMainArticle: !!mainArticle,
-      numRelatedArticles: relatedArticles.length,
-      tone: defaultTone,
-      pov: defaultPov,
-      industry: !!userIndustry,
-      hasWritingSample: !!writingSample
+      numRelatedArticles: relatedArticles.length
     });
 
-    const posts = await generateAnalysis(prompt);
+    // Generate posts using OpenAI
+    const posts = await generateAnalysis(topic, {
+      mainArticle,
+      relatedArticles,
+      tone: defaultTone,
+      pov: defaultPov,
+      industry: userIndustry,
+      writingSample
+    });
+
     console.log(`Successfully generated ${posts.length} posts`);
 
-    if (!posts || !Array.isArray(posts)) {
-      throw new Error("Invalid response from OpenAI");
-    }
-
     // Save generated content
+    console.log("Saving generated content...");
     const generatedContentId = await saveGeneratedContent(
       supabase,
       userId,
@@ -120,17 +133,27 @@ serve(async (req) => {
       { tone: defaultTone, pov: defaultPov }
     );
 
+    console.log("Content saved with ID:", generatedContentId);
+
     // Save the posts
+    console.log("Saving generated posts...");
     await saveLinkedInPosts(supabase, userId, generatedContentId, posts);
+
+    console.log("Successfully completed post generation process");
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
     console.error("Error in generate-linkedin-post function:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({ 
+        error: error.message || 'An unexpected error occurred',
+        timestamp: new Date().toISOString()
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
   }
 });
