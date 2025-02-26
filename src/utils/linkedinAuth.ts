@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 export async function connectLinkedIn() {
@@ -8,7 +9,8 @@ export async function connectLinkedIn() {
     options: {
       scopes: 'openid profile email',
       queryParams: {
-        prompt: 'consent'
+        prompt: 'consent',
+        access_type: 'offline'
       }
     }
   });
