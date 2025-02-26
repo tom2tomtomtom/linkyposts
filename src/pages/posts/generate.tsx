@@ -89,8 +89,14 @@ export default function GeneratePost() {
     }
 
     setIsGenerating(true);
+    console.log("Starting post generation with data:", formData);
 
     try {
+      console.log("Calling generate-linkedin-post function with params:", {
+        userId: user.id,
+        ...formData
+      });
+
       const { data, error } = await supabase.functions.invoke("generate-linkedin-post", {
         body: {
           userId: user.id,
@@ -104,12 +110,67 @@ export default function GeneratePost() {
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error from edge function:", error);
+        throw error;
+      }
+
+      console.log("Received response from edge function:", data);
+
+      // Let's save the generated content first
+      console.log("Saving generated content to database...");
+      const { data: generatedContent, error: contentError } = await supabase
+        .from("generated_content")
+        .insert({
+          user_id: user.id,
+          topic: formData.topic,
+          tone: formData.tone,
+          pov: formData.pov,
+          writing_sample: formData.writingSample,
+          content: data.posts[0].content, // Save the first post's content
+          status: 'draft'
+        })
+        .select()
+        .single();
+
+      if (contentError) {
+        console.error("Error saving generated content:", contentError);
+        throw contentError;
+      }
+
+      console.log("Successfully saved generated content:", generatedContent);
+
+      // Now save the posts
+      console.log("Saving posts to database...");
+      const postsToInsert = data.posts.map((post: any) => ({
+        user_id: user.id,
+        content: post.content,
+        topic: formData.topic,
+        hashtags: post.hashtags || [],
+        generated_content_id: generatedContent.id,
+        hook: post.hook,
+        is_current_version: true,
+        version_group: crypto.randomUUID(),
+      }));
+
+      console.log("Preparing to insert posts:", postsToInsert);
+
+      const { data: savedPosts, error: postsError } = await supabase
+        .from("linkedin_posts")
+        .insert(postsToInsert)
+        .select();
+
+      if (postsError) {
+        console.error("Error saving posts:", postsError);
+        throw postsError;
+      }
+
+      console.log("Successfully saved posts:", savedPosts);
 
       toast.success("Posts generated successfully!");
       navigate("/posts");
     } catch (error: any) {
-      console.error("Error generating posts:", error);
+      console.error("Error in post generation process:", error);
       toast.error(error.message || "Failed to generate posts");
     } finally {
       setIsGenerating(false);
