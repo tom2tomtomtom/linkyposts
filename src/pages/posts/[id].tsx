@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -8,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Copy, Save, Trash2, CalendarClock, Share2, Link, Calendar } from "lucide-react";
+import { Copy, Save, Trash2, CalendarClock, Share2, Link, Calendar, Image, ImagePlus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -31,9 +30,9 @@ type Post = {
   published_at: string | null;
   scheduled_for: string | null;
   sources?: Source[];
+  image_url?: string;
 };
 
-// Function to clean markdown-style formatting
 const cleanMarkdownContent = (content: string) => {
   return content.replace(/\*\*(.*?)\*\*/g, '$1');
 };
@@ -49,6 +48,9 @@ export default function PostDetail() {
   const [hashtags, setHashtags] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [scheduledFor, setScheduledFor] = useState("");
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [customPrompt, setCustomPrompt] = useState("");
+  const [showCustomPrompt, setShowCustomPrompt] = useState(false);
 
   const { data: post, isLoading } = useQuery({
     queryKey: ["post", id],
@@ -59,7 +61,8 @@ export default function PostDetail() {
         .from("linkedin_posts")
         .select(`
           *,
-          sources:post_sources(id, title, url, publication_date)
+          sources:post_sources(id, title, url, publication_date),
+          image_url
         `)
         .eq("id", id)
         .eq("user_id", user.id)
@@ -85,7 +88,7 @@ export default function PostDetail() {
         .eq("status", "pending")
         .single();
 
-      if (error && error.code !== "PGRST116") throw error; // PGRST116 is "not found"
+      if (error && error.code !== "PGRST116") throw error;
       return data;
     },
     enabled: !!user && !!id
@@ -228,6 +231,39 @@ export default function PostDetail() {
       toast.success("Post copied to clipboard");
     } catch (error) {
       toast.error("Failed to copy post");
+    }
+  };
+
+  const generateImage = async (useCustomPrompt = false) => {
+    if (!user || !post) return;
+    
+    setIsGeneratingImage(true);
+    try {
+      const response = await supabase.functions.invoke('generate-post-image', {
+        body: {
+          userId: user.id,
+          postId: id,
+          postContent: post.content,
+          topic: post.topic,
+          customPrompt: useCustomPrompt ? customPrompt : undefined
+        },
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+
+      if (response.data?.imageUrl) {
+        queryClient.invalidateQueries({ queryKey: ["post", id] });
+        toast.success("Image generated successfully!");
+        setShowCustomPrompt(false);
+        setCustomPrompt("");
+      }
+    } catch (error: any) {
+      console.error('Error generating image:', error);
+      toast.error(error.message || "Failed to generate image");
+    } finally {
+      setIsGeneratingImage(false);
     }
   };
 
@@ -395,6 +431,93 @@ export default function PostDetail() {
                         {cleanMarkdownContent(post.content)}
                       </p>
                     </div>
+
+                    <div>
+                      <Label className="text-muted-foreground">Image</Label>
+                      {post.image_url ? (
+                        <div className="relative mt-2">
+                          <img
+                            src={post.image_url}
+                            alt={post.topic || "Post image"}
+                            className="w-full h-64 object-cover rounded-lg"
+                          />
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            className="absolute top-2 right-2"
+                            onClick={async () => {
+                              try {
+                                await updateMutation.mutateAsync({ image_url: null });
+                                toast.success("Image removed");
+                              } catch (error: any) {
+                                toast.error("Failed to remove image");
+                              }
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="mt-2 space-y-4">
+                          {showCustomPrompt ? (
+                            <div className="space-y-4">
+                              <Textarea
+                                value={customPrompt}
+                                onChange={(e) => setCustomPrompt(e.target.value)}
+                                placeholder="Describe the image you want to generate..."
+                                className="min-h-[100px]"
+                              />
+                              <div className="flex gap-2">
+                                <Button
+                                  onClick={() => generateImage(true)}
+                                  disabled={isGeneratingImage || !customPrompt.trim()}
+                                >
+                                  {isGeneratingImage ? (
+                                    "Generating..."
+                                  ) : (
+                                    <>
+                                      <ImagePlus className="w-4 h-4 mr-2" />
+                                      Generate with Custom Prompt
+                                    </>
+                                  )}
+                                </Button>
+                                <Button
+                                  variant="secondary"
+                                  onClick={() => setShowCustomPrompt(false)}
+                                  disabled={isGeneratingImage}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="flex gap-2">
+                              <Button
+                                onClick={() => generateImage(false)}
+                                disabled={isGeneratingImage}
+                              >
+                                {isGeneratingImage ? (
+                                  "Generating..."
+                                ) : (
+                                  <>
+                                    <Image className="w-4 h-4 mr-2" />
+                                    Generate Image with AI
+                                  </>
+                                )}
+                              </Button>
+                              <Button
+                                variant="secondary"
+                                onClick={() => setShowCustomPrompt(true)}
+                                disabled={isGeneratingImage}
+                              >
+                                Use Custom Prompt
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
                     {post.sources && post.sources.length > 0 && (
                       <div>
                         <Label className="text-muted-foreground">Sources</Label>
