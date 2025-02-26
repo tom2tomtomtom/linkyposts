@@ -13,7 +13,7 @@ export default function LinkedInLoginButton() {
 
   useEffect(() => {
     // Listen for auth state changes from the popup window
-    const { subscription } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
         console.log('Auth state changed:', { event, session });
         toast.success('Successfully signed in!');
@@ -22,7 +22,7 @@ export default function LinkedInLoginButton() {
     });
 
     return () => {
-      subscription.unsubscribe();
+      data.subscription.unsubscribe();
     };
   }, [navigate]);
 
