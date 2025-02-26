@@ -11,6 +11,7 @@ export type Database = {
     Tables: {
       generated_content: {
         Row: {
+          content: string
           created_at: string | null
           id: string
           pov: string | null
@@ -23,6 +24,7 @@ export type Database = {
           writing_sample: string | null
         }
         Insert: {
+          content: string
           created_at?: string | null
           id?: string
           pov?: string | null
@@ -35,6 +37,7 @@ export type Database = {
           writing_sample?: string | null
         }
         Update: {
+          content?: string
           created_at?: string | null
           id?: string
           pov?: string | null
