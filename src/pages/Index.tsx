@@ -1,3 +1,4 @@
+
 import { Link } from "react-router-dom";
 
 const Index = () => {
@@ -12,7 +13,7 @@ const Index = () => {
         <div className="mx-auto max-w-2xl py-32 sm:py-48 lg:py-56">
           <div className="text-center">
             <h2 className="text-3xl sm:text-4xl font-bold leading-8 text-[#0A66C2] mb-4">
-              MAI_WORD
+              MAI-TYPE
             </h2>
             <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-6xl">
               AI-Powered LinkedIn Posts
