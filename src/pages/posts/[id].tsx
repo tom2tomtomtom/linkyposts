@@ -4,7 +4,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Share2, Loader2, Copy, Trash2, ArrowLeft } from "lucide-react";
+import { Share2, Loader2, Copy, Trash2, ArrowLeft, ImagePlus, PencilIcon } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -16,6 +16,7 @@ export default function PostDetail() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [isPublishing, setIsPublishing] = React.useState(false);
+  const [isGeneratingImage, setIsGeneratingImage] = React.useState(false);
 
   const { data: post, isLoading } = useQuery({
     queryKey: ["post", id],
@@ -37,16 +38,19 @@ export default function PostDetail() {
   const { data: linkedinToken } = useQuery({
     queryKey: ["linkedin_token", user?.id],
     queryFn: async () => {
+      if (!user?.id) return null;
+
       const { data, error } = await supabase
         .from("linkedin_auth_tokens")
         .select("*")
-        .eq("user_id", user?.id)
+        .eq("user_id", user.id)
         .maybeSingle();
       
       if (error) throw error;
       return data;
     },
-    enabled: !!user?.id
+    enabled: !!user?.id,
+    refetchInterval: 5 * 60 * 1000 // Refetch every 5 minutes to check token validity
   });
 
   const handleCopyToClipboard = async () => {
@@ -79,6 +83,36 @@ export default function PostDetail() {
     }
   };
 
+  const handleGenerateImage = async () => {
+    if (!id || !post?.topic || !user?.id) return;
+
+    try {
+      setIsGeneratingImage(true);
+      const { data, error } = await supabase.functions.invoke("generate-post-image", {
+        body: { postId: id, topic: post.topic }
+      });
+
+      if (error) throw error;
+
+      if (data?.imageUrl) {
+        const { error: updateError } = await supabase
+          .from("linkedin_posts")
+          .update({ image_url: data.imageUrl })
+          .eq("id", id);
+
+        if (updateError) throw updateError;
+
+        queryClient.invalidateQueries({ queryKey: ["post", id] });
+        toast.success("Image generated successfully");
+      }
+    } catch (error: any) {
+      console.error("Error generating image:", error);
+      toast.error("Failed to generate image");
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
+
   const handlePublish = async () => {
     if (!user?.id || !post?.content) {
       toast.error("You must be logged in and have post content to publish");
@@ -88,16 +122,9 @@ export default function PostDetail() {
     try {
       setIsPublishing(true);
       
-      // If not connected to LinkedIn, initiate LinkedIn OAuth flow
-      if (!linkedinToken) {
-        toast.info("Please connect your LinkedIn account first");
-        await connectLinkedIn();
-        return;
-      }
-
-      // Check if the LinkedIn token is expired
-      if (linkedinToken.expires_at && new Date(linkedinToken.expires_at) < new Date()) {
-        toast.info("LinkedIn connection expired, please reconnect");
+      // Check if we have a valid LinkedIn token
+      if (!linkedinToken?.access_token || (linkedinToken.expires_at && new Date(linkedinToken.expires_at) <= new Date())) {
+        toast.info("Reconnecting to LinkedIn...");
         await connectLinkedIn();
         return;
       }
@@ -106,7 +133,7 @@ export default function PostDetail() {
       const result = await publishToLinkedIn(post.content, user.id);
       
       // Update post with LinkedIn post ID
-      if (result.postId) {
+      if (result?.postId) {
         const { error: updateError } = await supabase
           .from("linkedin_posts")
           .update({ 
@@ -178,7 +205,20 @@ export default function PostDetail() {
               variant="secondary"
               onClick={() => navigate(`/posts/${id}/edit`)}
             >
+              <PencilIcon className="w-4 h-4 mr-2" />
               Edit
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={handleGenerateImage}
+              disabled={isGeneratingImage}
+            >
+              {isGeneratingImage ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <ImagePlus className="w-4 h-4 mr-2" />
+              )}
+              Generate Image
             </Button>
             <Button
               variant="destructive"
@@ -200,6 +240,12 @@ export default function PostDetail() {
             </Button>
           </div>
         </div>
+        
+        {post.image_url && (
+          <div className="mb-6">
+            <img src={post.image_url} alt="Post illustration" className="rounded-lg w-full max-w-2xl mx-auto" />
+          </div>
+        )}
         
         <div className="whitespace-pre-wrap">{post.content}</div>
         
