@@ -91,20 +91,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
+    if (!user?.id) {
+      console.log('No user found during sign out');
+      navigate('/');
+      return;
+    }
+
     try {
-      // First clear any stored tokens
-      const { error: tokenError } = await supabase
-        .from('linkedin_auth_tokens')
-        .delete()
-        .eq('user_id', user?.id);
+      // Store the user ID before we clear everything
+      const userId = user.id;
 
-      if (tokenError) {
-        console.error('Error clearing LinkedIn tokens:', tokenError);
+      // First sign out from Supabase to invalidate the session
+      const { error: signOutError } = await supabase.auth.signOut();
+      if (signOutError) throw signOutError;
+
+      // Then try to clear LinkedIn tokens if they exist
+      try {
+        const { error: tokenError } = await supabase
+          .from('linkedin_auth_tokens')
+          .delete()
+          .eq('user_id', userId);
+
+        if (tokenError) {
+          console.error('Error clearing LinkedIn tokens:', tokenError);
+        }
+      } catch (tokenError) {
+        console.error('Error during token cleanup:', tokenError);
+        // Continue with sign out even if token cleanup fails
       }
-
-      // Then sign out from Supabase
-      const { error } = await supabase.auth.signOut();
-      if (error) throw error;
 
       // Clear local state
       setSession(null);
@@ -116,7 +130,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } catch (error: any) {
       console.error('Sign out error:', error);
       toast.error('Error signing out: ' + error.message);
-      throw error;
+
+      // Force navigation to home page even if there's an error
+      navigate('/');
     }
   };
 
