@@ -5,12 +5,13 @@ export async function connectLinkedIn() {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'linkedin_oidc',
     options: {
-      scopes: 'openid profile email w_member_social',
+      scopes: 'profile email w_member_social',
       redirectTo: `${window.location.origin}/auth/callback`
     }
   });
 
   if (error) {
+    console.error('LinkedIn login error:', error);
     throw error;
   }
 

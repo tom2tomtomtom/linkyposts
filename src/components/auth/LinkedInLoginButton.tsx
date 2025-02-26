@@ -2,13 +2,15 @@
 import { Button } from "@/components/ui/button";
 import { connectLinkedIn } from "@/utils/linkedinAuth";
 import { LinkedinIcon } from "lucide-react";
+import { toast } from "sonner";
 
 export default function LinkedInLoginButton() {
   const handleLinkedInLogin = async () => {
     try {
       await connectLinkedIn();
-    } catch (error) {
+    } catch (error: any) {
       console.error('LinkedIn login error:', error);
+      toast.error(error.message || 'Failed to connect with LinkedIn');
     }
   };
 
