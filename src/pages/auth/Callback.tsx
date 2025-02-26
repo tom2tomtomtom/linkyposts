@@ -10,6 +10,9 @@ export default function Callback() {
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
+        // Log the full URL for debugging
+        console.log('Callback URL:', window.location.href);
+        
         // Get error from URL if present
         const params = new URLSearchParams(window.location.search);
         const errorParam = params.get('error');
@@ -21,7 +24,11 @@ export default function Callback() {
         }
         
         const { data: { session }, error } = await supabase.auth.getSession();
-        console.log('Auth callback session check:', { session: !!session, error });
+        console.log('Auth callback session check:', { 
+          hasSession: !!session, 
+          error,
+          userId: session?.user?.id 
+        });
         
         if (error) {
           console.error('Auth callback session error:', error);
@@ -56,4 +63,3 @@ export default function Callback() {
     </div>
   );
 }
-

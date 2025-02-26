@@ -2,11 +2,17 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export async function connectLinkedIn() {
+  const redirectUrl = `${window.location.origin}/auth/callback`;
+  console.log('Initiating LinkedIn OAuth with redirect URL:', redirectUrl);
+  
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'linkedin_oidc',
     options: {
       scopes: 'profile email',
-      redirectTo: `${window.location.origin}/auth/callback`
+      redirectTo: redirectUrl,
+      queryParams: {
+        prompt: 'consent'
+      }
     }
   });
 
