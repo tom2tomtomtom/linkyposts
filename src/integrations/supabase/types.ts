@@ -51,6 +51,36 @@ export type Database = {
         }
         Relationships: []
       }
+      linkedin_auth_tokens: {
+        Row: {
+          access_token: string
+          created_at: string | null
+          expires_at: string
+          id: string
+          refresh_token: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          access_token: string
+          created_at?: string | null
+          expires_at: string
+          id?: string
+          refresh_token?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          access_token?: string
+          created_at?: string | null
+          expires_at?: string
+          id?: string
+          refresh_token?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       linkedin_posts: {
         Row: {
           content: string
@@ -61,6 +91,7 @@ export type Database = {
           id: string
           image_url: string | null
           is_current_version: boolean | null
+          linkedin_post_id: string | null
           news_reference: string | null
           published_at: string | null
           scheduled_for: string | null
@@ -78,6 +109,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_current_version?: boolean | null
+          linkedin_post_id?: string | null
           news_reference?: string | null
           published_at?: string | null
           scheduled_for?: string | null
@@ -95,6 +127,7 @@ export type Database = {
           id?: string
           image_url?: string | null
           is_current_version?: boolean | null
+          linkedin_post_id?: string | null
           news_reference?: string | null
           published_at?: string | null
           scheduled_for?: string | null

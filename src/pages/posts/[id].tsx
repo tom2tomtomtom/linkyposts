@@ -1,560 +1,145 @@
-import React, { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+
+import React from "react";
+import { useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { toast } from "sonner";
-import { Copy, Save, Trash2, CalendarClock, Share2, Link, Calendar, Image, ImagePlus } from "lucide-react";
+import { Share2, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-
-type Source = {
-  id: string;
-  title: string;
-  url: string;
-  publication_date: string;
-};
-
-type Post = {
-  id: string;
-  content: string;
-  hook?: string | null;
-  news_reference?: string | null;
-  topic: string | null;
-  hashtags: string[] | null;
-  created_at: string;
-  updated_at: string;
-  published_at: string | null;
-  scheduled_for: string | null;
-  sources?: Source[];
-  image_url?: string;
-};
-
-const cleanMarkdownContent = (content: string) => {
-  return content.replace(/\*\*(.*?)\*\*/g, '$1');
-};
+import { toast } from "sonner";
+import { connectLinkedIn, publishToLinkedIn } from "@/utils/linkedinAuth";
 
 export default function PostDetail() {
   const { id } = useParams();
   const { user } = useAuth();
-  const navigate = useNavigate();
-  const queryClient = useQueryClient();
-
-  const [content, setContent] = useState("");
-  const [topic, setTopic] = useState("");
-  const [hashtags, setHashtags] = useState("");
-  const [isEditing, setIsEditing] = useState(false);
-  const [scheduledFor, setScheduledFor] = useState("");
-  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
-  const [customPrompt, setCustomPrompt] = useState("");
-  const [showCustomPrompt, setShowCustomPrompt] = useState(false);
+  const [isPublishing, setIsPublishing] = React.useState(false);
 
   const { data: post, isLoading } = useQuery({
     queryKey: ["post", id],
     queryFn: async () => {
-      if (!user || !id) throw new Error("Missing required data");
-
+      if (!id) throw new Error("No post ID provided");
+      
       const { data, error } = await supabase
         .from("linkedin_posts")
-        .select(`
-          *,
-          sources:post_sources(id, title, url, publication_date),
-          image_url
-        `)
-        .eq("id", id)
-        .eq("user_id", user.id)
-        .eq("is_current_version", true)
-        .single();
-
-      if (error) throw error;
-      return data as Post;
-    },
-    enabled: !!user && !!id
-  });
-
-  const { data: schedule } = useQuery({
-    queryKey: ["schedule", id],
-    queryFn: async () => {
-      if (!user || !id) throw new Error("Missing required data");
-
-      const { data, error } = await supabase
-        .from("post_schedules")
         .select("*")
-        .eq("linkedin_post_id", id)
-        .eq("user_id", user.id)
-        .eq("status", "pending")
+        .eq("id", id)
         .single();
-
-      if (error && error.code !== "PGRST116") throw error;
+      
+      if (error) throw error;
       return data;
     },
-    enabled: !!user && !!id
+    enabled: !!id
   });
 
-  useEffect(() => {
-    if (post) {
-      setContent(post.content);
-      setTopic(post.topic || "");
-      setHashtags(post.hashtags?.join(" ") || "");
-    }
-  }, [post, isEditing]);
-
-  useEffect(() => {
-    if (schedule) {
-      const scheduledDate = new Date(schedule.scheduled_time);
-      const formattedDate = scheduledDate.toISOString().slice(0, 16);
-      setScheduledFor(formattedDate);
-    }
-  }, [schedule]);
-
-  const updateMutation = useMutation({
-    mutationFn: async (updatedPost: Partial<Post>) => {
-      if (!user || !id) throw new Error("Missing required data");
-
-      const { error } = await supabase
-        .from("linkedin_posts")
-        .update(updatedPost)
-        .eq("id", id)
-        .eq("user_id", user.id);
-
+  const { data: linkedinToken } = useQuery({
+    queryKey: ["linkedin_token", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("linkedin_auth_tokens")
+        .select("*")
+        .eq("user_id", user?.id)
+        .maybeSingle();
+      
       if (error) throw error;
+      return data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["post", id] });
-      toast.success("Post updated successfully");
-      setIsEditing(false);
-    },
-    onError: (error) => {
-      toast.error("Failed to update post");
-      console.error("Update error:", error);
-    },
+    enabled: !!user?.id
   });
 
-  const scheduleMutation = useMutation({
-    mutationFn: async () => {
-      if (!user || !id || !scheduledFor) throw new Error("Missing required data");
+  const handlePublish = async () => {
+    if (!user?.id || !post?.content) return;
 
-      const { error: deleteError } = await supabase
-        .from("post_schedules")
-        .delete()
-        .eq("linkedin_post_id", id)
-        .eq("user_id", user.id);
-
-      if (deleteError) throw deleteError;
-
-      const { error: insertError } = await supabase
-        .from("post_schedules")
-        .insert({
-          linkedin_post_id: id,
-          user_id: user.id,
-          scheduled_time: new Date(scheduledFor).toISOString(),
-          status: "pending"
-        });
-
-      if (insertError) throw insertError;
-
-      const { error: updateError } = await supabase
-        .from("linkedin_posts")
-        .update({ scheduled_for: new Date(scheduledFor).toISOString() })
-        .eq("id", id)
-        .eq("user_id", user.id);
-
-      if (updateError) throw updateError;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["schedule", id] });
-      queryClient.invalidateQueries({ queryKey: ["post", id] });
-      toast.success("Post scheduled successfully");
-    },
-    onError: (error) => {
-      toast.error("Failed to schedule post");
-      console.error("Schedule error:", error);
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: async () => {
-      if (!user || !id) throw new Error("Missing required data");
-
-      const { error } = await supabase
-        .from("linkedin_posts")
-        .delete()
-        .eq("id", id)
-        .eq("user_id", user.id);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      toast.success("Post deleted successfully");
-      navigate("/posts");
-    },
-    onError: (error) => {
-      toast.error("Failed to delete post");
-      console.error("Delete error:", error);
-    },
-  });
-
-  const handleSave = () => {
-    const parsedHashtags = hashtags
-      .split(" ")
-      .filter(tag => tag.length > 0)
-      .map(tag => tag.startsWith("#") ? tag : `#${tag}`);
-
-    updateMutation.mutate({
-      content,
-      topic: topic || null,
-      hashtags: parsedHashtags,
-    });
-  };
-
-  const handleSchedule = () => {
-    if (!scheduledFor) {
-      toast.error("Please select a date and time for scheduling");
-      return;
-    }
-
-    const scheduledDate = new Date(scheduledFor);
-    if (scheduledDate <= new Date()) {
-      toast.error("Scheduled time must be in the future");
-      return;
-    }
-
-    scheduleMutation.mutate();
-  };
-
-  const handleCopyToClipboard = async () => {
     try {
-      await navigator.clipboard.writeText(content);
-      toast.success("Post copied to clipboard");
+      setIsPublishing(true);
+      
+      // If not connected to LinkedIn, connect first
+      if (!linkedinToken) {
+        await connectLinkedIn();
+        return;
+      }
+
+      // Publish to LinkedIn
+      const result = await publishToLinkedIn(post.content, user.id);
+      
+      // Update post with LinkedIn post ID
+      if (result.postId) {
+        const { error: updateError } = await supabase
+          .from("linkedin_posts")
+          .update({ 
+            linkedin_post_id: result.postId,
+            published_at: new Date().toISOString()
+          })
+          .eq("id", post.id);
+
+        if (updateError) throw updateError;
+      }
+
+      toast.success("Successfully published to LinkedIn!");
     } catch (error) {
-      toast.error("Failed to copy post");
-    }
-  };
-
-  const generateImage = async (useCustomPrompt = false) => {
-    if (!user || !post) return;
-    
-    setIsGeneratingImage(true);
-    try {
-      const response = await supabase.functions.invoke('generate-post-image', {
-        body: {
-          userId: user.id,
-          postId: id,
-          postContent: post.content,
-          topic: post.topic,
-          customPrompt: useCustomPrompt ? customPrompt : undefined
-        },
-      });
-
-      if (response.error) {
-        throw new Error(response.error.message);
-      }
-
-      if (response.data?.imageUrl) {
-        queryClient.invalidateQueries({ queryKey: ["post", id] });
-        toast.success("Image generated successfully!");
-        setShowCustomPrompt(false);
-        setCustomPrompt("");
-      }
-    } catch (error: any) {
-      console.error('Error generating image:', error);
-      toast.error(error.message || "Failed to generate image");
+      console.error("Error publishing to LinkedIn:", error);
+      toast.error("Failed to publish to LinkedIn");
     } finally {
-      setIsGeneratingImage(false);
-    }
-  };
-
-  const getStatusLabel = (post: Post) => {
-    if (post.published_at) return "Published";
-    if (post.scheduled_for) return "Scheduled";
-    return "Draft";
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Published":
-        return "text-green-600";
-      case "Scheduled":
-        return "text-blue-600";
-      default:
-        return "text-gray-600";
+      setIsPublishing(false);
     }
   };
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-secondary p-6">
-        <div className="max-w-3xl mx-auto">
-          <Card className="p-6">
-            <div className="text-center text-muted-foreground py-8">
-              Loading post...
-            </div>
-          </Card>
-        </div>
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="w-8 h-8 animate-spin" />
       </div>
     );
   }
 
   if (!post) {
     return (
-      <div className="min-h-screen bg-secondary p-6">
-        <div className="max-w-3xl mx-auto">
-          <Card className="p-6">
-            <div className="text-center text-muted-foreground py-8">
-              Post not found
-            </div>
-          </Card>
-        </div>
+      <div className="p-6">
+        <Card className="p-6">
+          <p className="text-center text-muted-foreground">Post not found</p>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-secondary p-6">
-      <div className="max-w-3xl mx-auto">
-        <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold">Post Details</h1>
-          <div className="flex gap-2">
-            {!isEditing ? (
-              <>
-                <Button variant="secondary" onClick={handleCopyToClipboard}>
-                  <Copy className="w-4 h-4 mr-2" />
-                  Copy
-                </Button>
-                <Button variant="secondary" onClick={() => setIsEditing(true)}>
-                  Edit
-                </Button>
-                <Button variant="secondary" onClick={() => deleteMutation.mutate()}>
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Delete
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button variant="secondary" onClick={() => setIsEditing(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={handleSave}>
-                  <Save className="w-4 h-4 mr-2" />
-                  Save Changes
-                </Button>
-              </>
+    <div className="p-6">
+      <Card className="p-6">
+        <div className="flex justify-between items-start mb-6">
+          <div>
+            <h1 className="text-2xl font-bold mb-2">{post.topic || "Untitled Post"}</h1>
+            {post.hook && (
+              <p className="text-blue-600 mb-4">{post.hook}</p>
             )}
           </div>
+          <Button
+            onClick={handlePublish}
+            disabled={isPublishing || !!post.linkedin_post_id}
+          >
+            {isPublishing ? (
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            ) : (
+              <Share2 className="w-4 h-4 mr-2" />
+            )}
+            {post.linkedin_post_id ? "Published" : "Publish to LinkedIn"}
+          </Button>
         </div>
-
-        <Card className="p-6">
-          <div className="space-y-6">
-            <div>
-              <div className="flex items-center gap-4 mb-4">
-                <span className={`${getStatusColor(getStatusLabel(post))} font-medium`}>
-                  {getStatusLabel(post)}
-                </span>
-                {post.scheduled_for && (
-                  <span className="text-sm text-muted-foreground flex items-center gap-1">
-                    <CalendarClock className="w-4 h-4" />
-                    Scheduled for {new Date(post.scheduled_for).toLocaleDateString()}
-                  </span>
-                )}
-                {post.published_at && (
-                  <span className="text-sm text-muted-foreground flex items-center gap-1">
-                    <Share2 className="w-4 h-4" />
-                    Published on {new Date(post.published_at).toLocaleDateString()}
-                  </span>
-                )}
-              </div>
-
-              {!post.published_at && (
-                <div className="mb-6">
-                  <Label htmlFor="scheduledFor">Schedule Post</Label>
-                  <div className="flex gap-2 mt-1">
-                    <Input
-                      id="scheduledFor"
-                      type="datetime-local"
-                      value={scheduledFor}
-                      onChange={(e) => setScheduledFor(e.target.value)}
-                      min={new Date().toISOString().slice(0, 16)}
-                    />
-                    <Button onClick={handleSchedule} disabled={!scheduledFor}>
-                      <Calendar className="w-4 h-4 mr-2" />
-                      {schedule ? "Update Schedule" : "Schedule"}
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              <div className="space-y-4">
-                {isEditing ? (
-                  <>
-                    <div>
-                      <Label htmlFor="topic">Topic</Label>
-                      <Input
-                        id="topic"
-                        value={topic}
-                        onChange={(e) => setTopic(e.target.value)}
-                        placeholder="Enter topic"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="content">Content</Label>
-                      <Textarea
-                        id="content"
-                        value={content}
-                        onChange={(e) => setContent(e.target.value)}
-                        className="min-h-[200px]"
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="hashtags">Hashtags</Label>
-                      <Input
-                        id="hashtags"
-                        value={hashtags}
-                        onChange={(e) => setHashtags(e.target.value)}
-                        placeholder="Enter hashtags separated by spaces"
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    {post.topic && (
-                      <div>
-                        <Label className="text-muted-foreground">Topic</Label>
-                        <p>{post.topic}</p>
-                      </div>
-                    )}
-                    <div>
-                      <Label className="text-muted-foreground">Content</Label>
-                      <p className="whitespace-pre-wrap font-medium">
-                        {cleanMarkdownContent(post.content)}
-                      </p>
-                    </div>
-
-                    <div>
-                      <Label className="text-muted-foreground">Image</Label>
-                      {post.image_url ? (
-                        <div className="relative mt-2">
-                          <img
-                            src={post.image_url}
-                            alt={post.topic || "Post image"}
-                            className="w-full h-64 object-cover rounded-lg"
-                          />
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            className="absolute top-2 right-2"
-                            onClick={async () => {
-                              try {
-                                await updateMutation.mutateAsync({ image_url: null });
-                                toast.success("Image removed");
-                              } catch (error: any) {
-                                toast.error("Failed to remove image");
-                              }
-                            }}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <div className="mt-2 space-y-4">
-                          {showCustomPrompt ? (
-                            <div className="space-y-4">
-                              <Textarea
-                                value={customPrompt}
-                                onChange={(e) => setCustomPrompt(e.target.value)}
-                                placeholder="Describe the image you want to generate..."
-                                className="min-h-[100px]"
-                              />
-                              <div className="flex gap-2">
-                                <Button
-                                  onClick={() => generateImage(true)}
-                                  disabled={isGeneratingImage || !customPrompt.trim()}
-                                >
-                                  {isGeneratingImage ? (
-                                    "Generating..."
-                                  ) : (
-                                    <>
-                                      <ImagePlus className="w-4 h-4 mr-2" />
-                                      Generate with Custom Prompt
-                                    </>
-                                  )}
-                                </Button>
-                                <Button
-                                  variant="secondary"
-                                  onClick={() => setShowCustomPrompt(false)}
-                                  disabled={isGeneratingImage}
-                                >
-                                  Cancel
-                                </Button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex gap-2">
-                              <Button
-                                onClick={() => generateImage(false)}
-                                disabled={isGeneratingImage}
-                              >
-                                {isGeneratingImage ? (
-                                  "Generating..."
-                                ) : (
-                                  <>
-                                    <Image className="w-4 h-4 mr-2" />
-                                    Generate Image with AI
-                                  </>
-                                )}
-                              </Button>
-                              <Button
-                                variant="secondary"
-                                onClick={() => setShowCustomPrompt(true)}
-                                disabled={isGeneratingImage}
-                              >
-                                Use Custom Prompt
-                              </Button>
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-
-                    {post.sources && post.sources.length > 0 && (
-                      <div>
-                        <Label className="text-muted-foreground">Sources</Label>
-                        <div className="space-y-2 mt-2">
-                          {post.sources.map((source) => (
-                            <a
-                              key={source.id}
-                              href={source.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center gap-2 text-blue-600 hover:underline"
-                            >
-                              <Link className="w-4 h-4" />
-                              <span>{source.title}</span>
-                              <span className="text-sm text-muted-foreground">
-                                ({new Date(source.publication_date).toLocaleDateString()})
-                              </span>
-                            </a>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    {post.hashtags && post.hashtags.length > 0 && (
-                      <div>
-                        <Label className="text-muted-foreground">Hashtags</Label>
-                        <p className="text-blue-600">
-                          {post.hashtags.join(" ")}
-                        </p>
-                      </div>
-                    )}
-                  </>
-                )}
-              </div>
-            </div>
+        
+        <div className="whitespace-pre-wrap">{post.content}</div>
+        
+        {post.hashtags && post.hashtags.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {post.hashtags.map((tag: string) => (
+              <span
+                key={tag}
+                className="bg-secondary px-2 py-1 rounded-full text-sm text-muted-foreground"
+              >
+                #{tag}
+              </span>
+            ))}
           </div>
-        </Card>
-      </div>
+        )}
+      </Card>
     </div>
   );
 }
