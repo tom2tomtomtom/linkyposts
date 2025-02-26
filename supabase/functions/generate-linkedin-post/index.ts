@@ -18,7 +18,21 @@ serve(async (req) => {
   }
 
   try {
-    const { userId, topic, tone, pov, writingSample, industry, numPosts, includeNews } = await req.json()
+    console.log('Starting generate-linkedin-post function')
+    
+    const { userId, topic, tone, pov, writingSample, industry, numPosts, includeNews, generateImage: shouldGenerateImage } = await req.json()
+    
+    console.log('Request parameters:', {
+      userId,
+      topic,
+      tone,
+      pov,
+      industry,
+      numPosts,
+      includeNews,
+      shouldGenerateImage,
+      hasWritingSample: !!writingSample
+    })
 
     const supabase = createClient<Database>(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -26,9 +40,17 @@ serve(async (req) => {
     )
 
     // Fetch relevant news if requested
-    const newsArticles = includeNews ? await fetchRecentNews(industry) : []
+    let newsArticles = []
+    if (includeNews) {
+      console.log('Fetching news articles...')
+      try {
+        newsArticles = await fetchRecentNews(industry)
+        console.log(`Fetched ${newsArticles.length} news articles`)
+      } catch (error) {
+        console.error('Error fetching news:', error)
+      }
+    }
 
-    // Generate content for each requested post
     const generatedPosts = []
     for (let i = 0; i < numPosts; i++) {
       console.log(`Generating post ${i + 1} of ${numPosts}`)
@@ -41,59 +63,80 @@ serve(async (req) => {
         newsArticles,
       })
 
-      const content = await generateContent(contentPrompt, "You are a professional LinkedIn content writer.")
-      
-      // Generate an image for the post
-      const imagePrompt = buildImagePrompt(content)
-      const imageUrl = await generateImage(imagePrompt)
+      try {
+        const content = await generateContent(contentPrompt, "You are a professional LinkedIn content writer.")
+        console.log(`Content generated for post ${i + 1}`)
 
-      // Insert the post into the database
-      const { data: post, error: postError } = await supabase
-        .from('linkedin_posts')
-        .insert({
-          user_id: userId,
-          content,
-          topic,
-          image_url: imageUrl,
-          is_current_version: true,
-        })
-        .select()
-        .single()
-
-      if (postError) {
-        throw postError
-      }
-
-      // If we have news articles, create source records
-      if (newsArticles.length > 0) {
-        const { error: sourcesError } = await supabase
-          .from('post_sources')
-          .insert(
-            newsArticles.map(article => ({
-              linkedin_post_id: post.id,
-              title: article.title,
-              url: article.url,
-              publication_date: article.published_date,
-            }))
-          )
-
-        if (sourcesError) {
-          console.error('Error inserting sources:', sourcesError)
+        let imageUrl = null
+        if (shouldGenerateImage) {
+          console.log('Generating image...')
+          try {
+            const imagePrompt = buildImagePrompt(content)
+            imageUrl = await generateImage(imagePrompt)
+            console.log('Image generated successfully:', !!imageUrl)
+          } catch (error) {
+            console.error('Error generating image:', error)
+          }
         }
-      }
 
-      generatedPosts.push(post)
+        // Insert the post into the database
+        const { data: post, error: postError } = await supabase
+          .from('linkedin_posts')
+          .insert({
+            user_id: userId,
+            content,
+            topic,
+            image_url: imageUrl,
+            is_current_version: true,
+          })
+          .select()
+          .single()
+
+        if (postError) {
+          console.error('Error inserting post:', postError)
+          throw postError
+        }
+
+        console.log('Post inserted successfully:', post.id)
+
+        // If we have news articles, create source records
+        if (newsArticles.length > 0) {
+          const { error: sourcesError } = await supabase
+            .from('post_sources')
+            .insert(
+              newsArticles.map(article => ({
+                linkedin_post_id: post.id,
+                title: article.title,
+                url: article.url,
+                publication_date: article.published_date,
+              }))
+            )
+
+          if (sourcesError) {
+            console.error('Error inserting sources:', sourcesError)
+          } else {
+            console.log('Sources inserted successfully')
+          }
+        }
+
+        generatedPosts.push(post)
+      } catch (error) {
+        console.error(`Error generating post ${i + 1}:`, error)
+        throw error
+      }
     }
 
+    console.log('Function completed successfully')
     return new Response(
       JSON.stringify({ success: true, posts: generatedPosts }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   } catch (error) {
-    console.error('Error in generate-linkedin-post function:', error)
+    console.error('Function failed:', error)
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 })
+
