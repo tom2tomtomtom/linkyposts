@@ -1,8 +1,6 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 export async function connectLinkedIn() {
-  // Let Supabase handle the callback URL internally
   console.log('Initiating LinkedIn OAuth...');
   
   const { data, error } = await supabase.auth.signInWithOAuth({
