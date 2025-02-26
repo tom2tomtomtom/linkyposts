@@ -8,7 +8,7 @@ export async function connectLinkedIn() {
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'linkedin_oidc',
     options: {
-      scopes: 'profile email',
+      scopes: 'openid profile email',
       redirectTo: redirectUrl,
       queryParams: {
         prompt: 'consent'
@@ -37,3 +37,4 @@ export async function publishToLinkedIn(postContent: string, userId: string) {
     throw error;
   }
 }
+
