@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -22,6 +21,8 @@ type Source = {
 type Post = {
   id: string;
   content: string;
+  hook?: string | null;
+  news_reference?: string | null;
   topic: string | null;
   hashtags: string[] | null;
   created_at: string;
@@ -65,7 +66,6 @@ export default function PostDetail() {
     enabled: !!user && !!id
   });
 
-  // Also fetch any existing schedule
   const { data: schedule } = useQuery({
     queryKey: ["schedule", id],
     queryFn: async () => {
@@ -85,7 +85,6 @@ export default function PostDetail() {
     enabled: !!user && !!id
   });
 
-  // Update form state when post data changes or edit mode is enabled
   useEffect(() => {
     if (post) {
       setContent(post.content);
@@ -94,11 +93,9 @@ export default function PostDetail() {
     }
   }, [post, isEditing]);
 
-  // Set scheduled time from existing schedule
   useEffect(() => {
     if (schedule) {
       const scheduledDate = new Date(schedule.scheduled_time);
-      // Format date to YYYY-MM-DDThh:mm
       const formattedDate = scheduledDate.toISOString().slice(0, 16);
       setScheduledFor(formattedDate);
     }
@@ -131,7 +128,6 @@ export default function PostDetail() {
     mutationFn: async () => {
       if (!user || !id || !scheduledFor) throw new Error("Missing required data");
 
-      // First, delete any existing schedules
       const { error: deleteError } = await supabase
         .from("post_schedules")
         .delete()
@@ -140,7 +136,6 @@ export default function PostDetail() {
 
       if (deleteError) throw deleteError;
 
-      // Then create the new schedule
       const { error: insertError } = await supabase
         .from("post_schedules")
         .insert({
@@ -152,7 +147,6 @@ export default function PostDetail() {
 
       if (insertError) throw insertError;
 
-      // Update the post's scheduled_for date
       const { error: updateError } = await supabase
         .from("linkedin_posts")
         .update({ scheduled_for: new Date(scheduledFor).toISOString() })

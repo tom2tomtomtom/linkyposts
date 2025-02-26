@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Copy, Edit, Trash2, CalendarClock, CheckSquare, FileEdit } from "lucide-react";
+import { Copy, Edit, Trash2, CalendarClock, CheckSquare, FileEdit, Link } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -12,6 +12,8 @@ import { useAuth } from "@/hooks/useAuth";
 type Post = {
   id: string;
   content: string;
+  hook?: string | null;
+  news_reference?: string | null;
   topic: string | null;
   created_at: string;
   published_at: string | null;
@@ -206,8 +208,11 @@ export default function Posts() {
                   <div className="flex flex-col gap-4">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
+                        {post.hook && (
+                          <p className="font-medium text-lg mb-2 text-blue-600">{post.hook}</p>
+                        )}
                         <p className="line-clamp-3 mb-2">{post.content}</p>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className={`flex items-center gap-1 ${getStatusColor(status)}`}>
                             {getStatusIcon(status)}
                             {status}
@@ -216,6 +221,12 @@ export default function Posts() {
                             <span className="text-sm flex items-center gap-1 text-blue-600">
                               <CalendarClock className="w-4 h-4" />
                               {formatScheduledDateTime(post.scheduled_for)}
+                            </span>
+                          )}
+                          {post.news_reference && (
+                            <span className="text-sm flex items-center gap-1 text-purple-600">
+                              <Link className="w-4 h-4" />
+                              News reference
                             </span>
                           )}
                           {post.topic && (

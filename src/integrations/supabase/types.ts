@@ -54,9 +54,11 @@ export type Database = {
           created_at: string | null
           generated_content_id: string | null
           hashtags: string[] | null
+          hook: string | null
           id: string
           image_url: string | null
           is_current_version: boolean | null
+          news_reference: string | null
           published_at: string | null
           scheduled_for: string | null
           topic: string | null
@@ -69,9 +71,11 @@ export type Database = {
           created_at?: string | null
           generated_content_id?: string | null
           hashtags?: string[] | null
+          hook?: string | null
           id?: string
           image_url?: string | null
           is_current_version?: boolean | null
+          news_reference?: string | null
           published_at?: string | null
           scheduled_for?: string | null
           topic?: string | null
@@ -84,9 +88,11 @@ export type Database = {
           created_at?: string | null
           generated_content_id?: string | null
           hashtags?: string[] | null
+          hook?: string | null
           id?: string
           image_url?: string | null
           is_current_version?: boolean | null
+          news_reference?: string | null
           published_at?: string | null
           scheduled_for?: string | null
           topic?: string | null
