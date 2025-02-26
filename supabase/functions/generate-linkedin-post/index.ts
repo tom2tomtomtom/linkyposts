@@ -6,29 +6,36 @@ import ArticleExtractor from "npm:@extractus/article-extractor";
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
 serve(async (req) => {
-  console.log("Starting generate-linkedin-post function");
+  console.log("Function invoked with method:", req.method);
 
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     console.log("Handling CORS preflight request");
     return new Response(null, { 
-      status: 200,
+      status: 204, 
       headers: corsHeaders 
     });
   }
 
+  if (req.method !== 'POST') {
+    console.log("Invalid method:", req.method);
+    return new Response(
+      JSON.stringify({ error: 'Method not allowed' }), 
+      { 
+        status: 405,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
+  }
+
   try {
-    // Log the full request for debugging
-    console.log("Request method:", req.method);
-    console.log("Request headers:", Object.fromEntries(req.headers.entries()));
-
-    const payload = await req.json();
-    console.log("Request payload:", payload);
-
-    const { userId, topic, tone = "", pov = "", writingSample = "", industry = "", numPosts = 3, includeNews = true } = payload;
+    console.log("Starting request processing");
+    const { userId, topic, tone = "", pov = "", writingSample = "", industry = "", numPosts = 3, includeNews = true } = await req.json();
+    console.log("Received payload:", { userId, topic, tone, pov, industry, numPosts, includeNews });
 
     if (!userId || !topic) {
       throw new Error('Missing required parameters: userId and topic are required');
@@ -60,9 +67,14 @@ serve(async (req) => {
           contentLength: context.length
         });
       } catch (error) {
-        console.error("Error extracting article:", error);
+        console.error("Article extraction error:", error);
         throw new Error('Failed to extract article content. Please try a different URL or enter your topic directly.');
       }
+    }
+
+    const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!openAIApiKey) {
+      throw new Error('OpenAI API key is not configured');
     }
 
     // Prepare prompt for OpenAI
@@ -99,7 +111,7 @@ Make each post unique, offering different perspectives or insights about the top
     const openAIResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
+        'Authorization': `Bearer ${openAIApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -114,19 +126,19 @@ Make each post unique, offering different perspectives or insights about the top
     });
 
     if (!openAIResponse.ok) {
+      console.error("OpenAI API error status:", openAIResponse.status);
       const error = await openAIResponse.text();
-      console.error("OpenAI API error:", error);
+      console.error("OpenAI API error body:", error);
       throw new Error(`OpenAI API error: ${error}`);
     }
 
     const openAIData = await openAIResponse.json();
+    console.log("OpenAI response received");
+    
     const generatedContent = openAIData.choices[0]?.message?.content;
-
     if (!generatedContent) {
       throw new Error('No content generated from OpenAI');
     }
-
-    console.log("Successfully received response from OpenAI");
 
     // Split and validate posts
     const posts = generatedContent
@@ -137,7 +149,7 @@ Make each post unique, offering different perspectives or insights about the top
         const hasEmoji = /[\p{Emoji}]/u.test(post);
         const hasQuestion = /\?/.test(post);
         
-        return wordCount >= 300 && hasHashtags && hasEmoji && hasQuestion;
+        return wordCount >= 50 && hasHashtags && hasEmoji && hasQuestion;
       })
       .map(post => post.trim());
 
@@ -159,10 +171,13 @@ Make each post unique, offering different perspectives or insights about the top
     );
   } catch (error) {
     console.error("Error in generate-linkedin-post function:", error);
+    const errorMessage = error.message || 'An unexpected error occurred';
+    console.error("Error message:", errorMessage);
+    
     return new Response(
       JSON.stringify({ 
         success: false,
-        error: error.message || 'An unexpected error occurred',
+        error: errorMessage,
         timestamp: new Date().toISOString()
       }), 
       {
@@ -172,4 +187,3 @@ Make each post unique, offering different perspectives or insights about the top
     );
   }
 });
-
