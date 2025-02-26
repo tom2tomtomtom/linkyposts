@@ -17,16 +17,11 @@ serve(async (req) => {
   }
 
   try {
-    const {
-      userId,
-      topic,
-      tone = "",
-      pov = "",
-      writingSample = "",
-      industry = "",
-      numPosts = 3,
-      includeNews = true,
-    } = await req.json();
+    const { userId, topic, tone = "", pov = "", writingSample = "", industry = "", numPosts = 3, includeNews = true } = await req.json();
+
+    if (!userId || !topic) {
+      throw new Error('Missing required parameters: userId and topic are required');
+    }
 
     console.log("Received request with params:", { userId, topic, tone, pov, numPosts, includeNews });
 
@@ -37,22 +32,21 @@ serve(async (req) => {
     const isUrl = topic.startsWith('http://') || topic.startsWith('https://');
     if (isUrl) {
       console.log("Topic is a URL, fetching article content...");
-      try {
-        mainArticle = await extractArticleContent(topic);
-        console.log("Main article extracted:", {
-          title: mainArticle.title,
-          contentLength: mainArticle.content.length,
-          url: mainArticle.url
-        });
+      mainArticle = await extractArticleContent(topic);
+      
+      if (!mainArticle) {
+        throw new Error('Failed to extract article content');
+      }
 
-        if (includeNews) {
-          // Search for related articles based on the main article's title
-          relatedArticles = await findRelatedArticles(mainArticle.title);
-          console.log(`Found ${relatedArticles.length} related articles`);
-        }
-      } catch (error) {
-        console.error("Error processing articles:", error);
-        throw new Error(`Failed to process article: ${error.message}`);
+      console.log("Main article extracted:", {
+        title: mainArticle.title,
+        contentLength: mainArticle.content.length,
+        url: mainArticle.url
+      });
+
+      if (includeNews) {
+        relatedArticles = await findRelatedArticles(mainArticle.title);
+        console.log(`Found ${relatedArticles.length} related articles`);
       }
     }
 
@@ -75,7 +69,6 @@ serve(async (req) => {
     let prompt = `Generate ${numPosts} unique LinkedIn posts`;
 
     if (mainArticle) {
-      // When we have article content, make it the primary focus
       prompt += `\n\nMain Article Analysis:\nTitle: ${mainArticle.title}\nURL: ${mainArticle.url}\nContent: ${mainArticle.content}\n\n`;
       
       if (relatedArticles.length > 0) {
@@ -130,19 +123,14 @@ serve(async (req) => {
     // Save the posts
     await saveLinkedInPosts(supabase, userId, generatedContentId, posts);
 
-    return new Response(
-      JSON.stringify({ success: true }), 
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-
+    return new Response(JSON.stringify({ success: true }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   } catch (error) {
     console.error("Error in generate-linkedin-post function:", error);
-    return new Response(
-      JSON.stringify({ error: error.message }), 
-      { 
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      }
-    );
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 });
