@@ -43,14 +43,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         setIsLoading(false);
-        
-        if (_event === 'SIGNED_IN') {
-          navigate('/dashboard');
-          toast.success('Successfully signed in!');
-        } else if (_event === 'SIGNED_OUT') {
-          navigate('/');
-          toast.success('Successfully signed out');
-        }
       }
     );
 
@@ -68,6 +60,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       });
       
       if (error) throw error;
+      
+      navigate('/dashboard');
+      toast.success('Successfully signed in!');
     } catch (error: any) {
       toast.error(error.message);
       throw error;
@@ -96,15 +91,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signOut = async () => {
-    setIsLoading(true);
     try {
+      // First clear any stored tokens
+      const { error: tokenError } = await supabase
+        .from('linkedin_auth_tokens')
+        .delete()
+        .eq('user_id', user?.id);
+
+      if (tokenError) {
+        console.error('Error clearing LinkedIn tokens:', tokenError);
+      }
+
+      // Then sign out from Supabase
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
+
+      // Clear local state
+      setSession(null);
+      setUser(null);
+      
+      // Navigate to home page
+      navigate('/');
+      toast.success('Successfully signed out');
     } catch (error: any) {
-      toast.error(error.message);
+      console.error('Sign out error:', error);
+      toast.error('Error signing out: ' + error.message);
       throw error;
-    } finally {
-      setIsLoading(false);
     }
   };
 
