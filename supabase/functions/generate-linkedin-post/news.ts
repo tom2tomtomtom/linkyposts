@@ -1,5 +1,6 @@
 
-import { load } from "https://deno.land/x/cheerio@1.0.7/mod.ts";
+// @deno-types="https://deno.land/x/cheerio@1.0.7/types/cheerio.d.ts"
+import * as cheerio from "cheerio";
 
 interface Article {
   title: string;
@@ -15,7 +16,7 @@ export async function extractArticleContent(url: string): Promise<Article> {
   try {
     const response = await fetch(url);
     const html = await response.text();
-    const $ = load(html);
+    const $ = cheerio.load(html);
 
     // Extract title
     let title = $('meta[property="og:title"]').attr('content') || 
