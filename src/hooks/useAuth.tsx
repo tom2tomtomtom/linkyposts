@@ -116,13 +116,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithGoogle = async () => {
     try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
+      const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
-            scope: 'https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile',
           },
           redirectTo: `${window.location.origin}/auth/callback`
         }
@@ -131,10 +130,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (error) {
         console.error('Google sign in error:', error);
         throw error;
-      }
-
-      if (!data) {
-        throw new Error('No data returned from Google sign in');
       }
     } catch (error: any) {
       console.error('Google sign in error:', error);
