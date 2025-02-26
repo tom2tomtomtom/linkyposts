@@ -26,7 +26,7 @@ serve(async (req) => {
       includeNews = true,
     } = await req.json();
 
-    console.log("Received request:", { userId, topic, tone, pov, numPosts, includeNews });
+    console.log("Received request with params:", { userId, topic, tone, pov, numPosts, includeNews });
 
     let articleContent = "";
     let articleTitle = "";
@@ -41,9 +41,11 @@ serve(async (req) => {
         articleContent = article.content || "";
         articleTitle = article.title || "";
         articleUrl = topic;
-        console.log("Successfully extracted article:", {
-          title: articleTitle,
+        console.log("Article extraction results:", {
+          hasContent: !!articleContent,
           contentLength: articleContent.length,
+          title: articleTitle,
+          url: articleUrl
         });
       } catch (error) {
         console.error("Error extracting article content:", error);
@@ -53,11 +55,14 @@ serve(async (req) => {
     const supabase = createDbClient();
 
     // Get user preferences
+    console.log("Fetching user preferences for userId:", userId);
     const { data: preferences } = await supabase
       .from('user_preferences')
       .select('*')
       .eq('user_id', userId)
       .single();
+
+    console.log("User preferences:", preferences);
 
     const defaultTone = tone || preferences?.default_tone || 'professional';
     const defaultPov = pov || preferences?.default_pov || 'first person';
@@ -80,8 +85,9 @@ serve(async (req) => {
     if (industry) prompt += `\nIndustry Context: ${industry}`;
     if (writingSample) prompt += `\nMatch this writing style: ${writingSample}`;
 
-    console.log("Generating posts with prompt structure:", {
+    console.log("Generating posts with configuration:", {
       hasArticleContent: !!articleContent,
+      articleContentPreview: articleContent.slice(0, 200) + "...",
       tone: defaultTone,
       pov: defaultPov,
       industry: !!industry,
@@ -96,6 +102,7 @@ serve(async (req) => {
     }
 
     console.log(`Successfully generated ${posts.length} posts`);
+    console.log("Sample post preview:", posts[0]?.slice(0, 200));
 
     // Save generated content first
     const generatedContentId = await saveGeneratedContent(

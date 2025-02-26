@@ -7,12 +7,14 @@ const openai = new OpenAI({
 
 export async function generateAnalysis(prompt: string): Promise<string[]> {
   try {
+    console.log("Sending prompt to OpenAI:", prompt.slice(0, 500) + "...");
+
     const response = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4o-mini",
       messages: [
         {
           role: "system",
-          content: "You are a skilled professional content creator specializing in LinkedIn posts. Create engaging, insightful posts that drive engagement and demonstrate thought leadership. When article content is provided, focus primarily on discussing and analyzing that content while adding professional insights."
+          content: "You are a skilled professional content creator specializing in LinkedIn posts. When given an article, focus on discussing and analyzing its key points while adding valuable insights. Create engaging, insightful posts that drive engagement and demonstrate thought leadership."
         },
         {
           role: "user",
@@ -27,12 +29,15 @@ export async function generateAnalysis(prompt: string): Promise<string[]> {
       throw new Error("No content received from OpenAI");
     }
 
+    console.log("Received response from OpenAI:", content.slice(0, 500) + "...");
+
     // Split the response into individual posts
     const posts = content
       .split(/(?:\r?\n){2,}/)
       .filter(post => post.trim().length > 0)
       .map(post => post.trim());
 
+    console.log(`Split response into ${posts.length} posts`);
     return posts;
   } catch (error) {
     console.error("OpenAI API error:", error);
