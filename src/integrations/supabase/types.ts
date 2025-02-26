@@ -190,6 +190,44 @@ export type Database = {
           },
         ]
       }
+      post_images: {
+        Row: {
+          created_at: string | null
+          id: string
+          image_url: string
+          linkedin_post_id: string
+          prompt: string
+          storage_path: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          image_url: string
+          linkedin_post_id: string
+          prompt: string
+          storage_path: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          image_url?: string
+          linkedin_post_id?: string
+          prompt?: string
+          storage_path?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_images_linkedin_post_id_fkey"
+            columns: ["linkedin_post_id"]
+            isOneToOne: false
+            referencedRelation: "linkedin_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       post_schedules: {
         Row: {
           created_at: string | null

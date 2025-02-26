@@ -1,13 +1,13 @@
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import "https://deno.land/x/xhr@0.1.0/mod.ts"
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.7'
+import { OpenAI } from 'https://deno.land/x/openai@v4.28.0/mod.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -25,54 +25,39 @@ serve(async (req) => {
       throw new Error('OpenAI API key not configured')
     }
 
+    const openai = new OpenAI({ apiKey: openaiApiKey });
+
     // Generate prompt if not provided
     let imagePrompt = customPrompt
     if (!imagePrompt) {
-      const promptResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${openaiApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            {
-              role: 'system',
-              content: 'You are an expert at creating DALL-E prompts. Create detailed, vivid image prompts that will work well for professional LinkedIn posts.'
-            },
-            {
-              role: 'user',
-              content: `Create a DALL-E prompt for a professional LinkedIn post about "${topic}". The image should be visually appealing and relevant to the post content. Post content: "${postContent.substring(0, 500)}..."`
-            }
-          ],
-          temperature: 0.7,
-        }),
+      const chatCompletion = await openai.chat.completions.create({
+        model: 'gpt-4',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are an expert at creating DALL-E prompts. Create detailed, vivid image prompts that will work well for professional LinkedIn posts.'
+          },
+          {
+            role: 'user',
+            content: `Create a DALL-E prompt for a professional LinkedIn post about "${topic}". The image should be visually appealing and relevant to the post content. Post content: "${postContent.substring(0, 500)}..."`
+          }
+        ],
+        temperature: 0.7,
       })
 
-      const promptData = await promptResponse.json()
-      imagePrompt = promptData.choices[0]?.message?.content?.trim() || `Professional image related to ${topic}`
+      imagePrompt = chatCompletion.choices[0]?.message?.content?.trim() || `Professional image related to ${topic}`
       console.log("Generated image prompt:", imagePrompt)
     }
 
     // Generate image with DALL-E
-    const imageResponse = await fetch('https://api.openai.com/v1/images/generations', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${openaiApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: "dall-e-3",
-        prompt: imagePrompt,
-        n: 1,
-        size: "1024x1024",
-      }),
+    const image = await openai.images.generate({
+      model: "dall-e-3",
+      prompt: imagePrompt,
+      n: 1,
+      size: "1024x1024",
     })
 
-    const imageData = await imageResponse.json()
-    const imageUrl = imageData.data?.[0]?.url
-
+    const imageUrl = image.data[0]?.url
     if (!imageUrl) {
       throw new Error('Failed to generate image')
     }
@@ -126,3 +111,4 @@ serve(async (req) => {
     )
   }
 })
+
