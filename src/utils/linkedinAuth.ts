@@ -22,9 +22,8 @@ export async function connectLinkedIn() {
       provider: 'linkedin_oidc',
       options: {
         redirectTo: `${window.location.origin}/auth/callback`,
-        scopes: 'openid profile email w_member_social',
+        scopes: 'openid profile email w_member_social r_basicprofile r_liteprofile',
         queryParams: {
-          prompt: 'consent',
           access_type: 'offline'
         },
         skipBrowserRedirect: true
@@ -70,7 +69,7 @@ export async function refreshLinkedInToken(userId: string) {
 
     // If token exists and is still valid, return it
     if (existingToken && new Date(existingToken.expires_at) > new Date()) {
-      return existingToken.access_token;
+      return existingToken;
     }
 
     // Otherwise, refresh the session
@@ -79,19 +78,41 @@ export async function refreshLinkedInToken(userId: string) {
     if (refreshError) throw refreshError;
     if (!session) throw new Error('No session found after refresh');
 
+    // Get the LinkedIn member ID if not already stored
+    let linkedinUserId = existingToken?.linkedin_user_id;
+    if (!linkedinUserId) {
+      try {
+        const response = await fetch('https://api.linkedin.com/v2/me', {
+          headers: {
+            'Authorization': `Bearer ${session.provider_token}`,
+          }
+        });
+        
+        if (!response.ok) throw new Error('Failed to fetch LinkedIn profile');
+        const profile = await response.json();
+        linkedinUserId = profile.id;
+      } catch (error) {
+        console.error('Error fetching LinkedIn profile:', error);
+        throw error;
+      }
+    }
+
     // After successful refresh, update the token in our database
+    const newToken = {
+      user_id: userId,
+      access_token: session.provider_token,
+      linkedin_user_id: linkedinUserId,
+      expires_at: new Date(Date.now() + (session.expires_in || 3600) * 1000).toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
     const { error: updateError } = await supabase
       .from('linkedin_auth_tokens')
-      .upsert({ 
-        user_id: userId,
-        access_token: session.provider_token,
-        expires_at: new Date(Date.now() + (session.expires_in || 3600) * 1000).toISOString(),
-        updated_at: new Date().toISOString()
-      });
+      .upsert(newToken);
 
     if (updateError) throw updateError;
     
-    return session.provider_token;
+    return newToken;
   } catch (error) {
     console.error('Error refreshing LinkedIn token:', error);
     throw error;
@@ -102,13 +123,17 @@ export async function publishToLinkedIn(postContent: string, userId: string) {
   try {
     // First try to get or refresh token
     const token = await refreshLinkedInToken(userId);
-    if (!token) {
-      throw new Error('No valid LinkedIn token found');
+    if (!token?.access_token || !token.linkedin_user_id) {
+      throw new Error('No valid LinkedIn token or user ID found');
     }
 
-    // Now make the actual publish request
+    // Now make the actual publish request using the edge function
     const { data, error } = await supabase.functions.invoke('publish-to-linkedin', {
-      body: { content: postContent, userId }
+      body: { 
+        content: postContent, 
+        userId,
+        linkedinUserId: token.linkedin_user_id 
+      }
     });
 
     if (error) throw error;
