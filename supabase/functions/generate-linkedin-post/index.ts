@@ -1,134 +1,153 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { GeneratePostRequest } from './types.ts';
-import { fetchRelevantNews } from './news.ts';
-import { createSystemPrompt, createUserPrompt } from './prompts.ts';
-import { generateContent } from './openai.ts';
-import { saveGeneratedContent, saveLinkedInPosts } from './database.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+import OpenAI from "https://deno.land/x/openai@v4.24.0/mod.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { corsHeaders } from "../_shared/cors.ts";
 
-interface Source {
-  title: string;
-  url: string;
-  publication_date: string;
-}
+// Initialize OpenAI client
+const openai = new OpenAI({
+  apiKey: Deno.env.get('OPENAI_API_KEY') || '',
+});
 
-interface GeneratedPost {
-  content: string;
-  topic: string;
-  hook: string;
-  facts: Array<{
-    fact: string;
-    source: string;
-    date: string;
-  }>;
-  hashtags: string[];
-  sources: Source[];
-}
-
-serve(async (req) => {
+Deno.serve(async (req) => {
   // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response(null, {
+      headers: corsHeaders,
+      status: 204,
+    });
   }
 
   try {
-    // Get environment variables
-    const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-    const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-    
-    if (!openAIApiKey) {
-      throw new Error('OpenAI API key not configured');
-    }
+    console.log("Starting request processing");
 
-    // Initialize Supabase client with service role
-    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
-
-    // Parse request body
-    const { 
-      userId, 
-      topic, 
-      tone, 
-      pov, 
-      writingSample, 
-      industry = 'technology',
-      numPosts = 3,
-      includeNews = false
-    } = await req.json() as GeneratePostRequest;
+    const { userId, topic, tone, pov, writingSample, industry, numPosts, includeNews } = await req.json();
+    console.log("Received parameters:", { userId, topic, tone, pov, industry, numPosts, includeNews });
 
     // Validate required parameters
-    if (!userId || !topic || !tone || !pov) {
+    if (!userId || !topic) {
+      console.error("Missing required parameters");
       return new Response(
-        JSON.stringify({ error: 'Missing required parameters' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({
+          error: "Missing required parameters",
+        }),
+        {
+          status: 400,
+          headers: {
+            ...corsHeaders,
+            "Content-Type": "application/json",
+          },
+        }
       );
     }
 
-    // Fetch relevant news articles if requested
-    const recentNews = includeNews ? await fetchRelevantNews(supabase, topic, industry) : [];
+    // Create the system prompt
+    const systemPrompt = `You are a professional LinkedIn content creator who specializes in creating engaging, informative posts. 
+    Write ${numPosts} unique LinkedIn posts about ${topic} with a ${tone} tone using ${pov} point of view.
+    Each post should:
+    - Be between 800-1200 characters
+    - Include 3-5 relevant hashtags
+    - Have a strong hook in the first line
+    - Include a call to action
+    - Be formatted with clear paragraphs
+    - Match the writing style from the sample if provided`;
 
-    // Create prompts
-    const systemPrompt = createSystemPrompt();
-    const userPrompt = createUserPrompt(topic, tone, pov, industry, numPosts, recentNews, writingSample);
+    console.log("Generating content with OpenAI");
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4-turbo-preview",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: `Write ${numPosts} LinkedIn posts about ${topic}. Industry: ${industry}. Writing sample for style matching: ${writingSample || 'N/A'}` }
+      ],
+      temperature: 0.7,
+    });
 
-    // Generate content using OpenAI
-    const response = await generateContent(userPrompt);
-    const { posts, styleAnalysis } = response;
+    console.log("OpenAI response received");
 
-    // Save each post with its sources
-    const savedPosts = await Promise.all(posts.map(async (post: GeneratedPost) => {
-      // Insert the post
-      const { data: savedPost, error: postError } = await supabase
-        .from('linkedin_posts')
-        .insert({
-          user_id: userId,
-          content: post.content,
-          topic: post.topic,
-          hashtags: post.hashtags,
-          version_group: generateUUID(),
-          is_current_version: true,
-        })
-        .select()
-        .single();
+    if (!completion.choices[0]?.message?.content) {
+      console.error("No content generated from OpenAI");
+      throw new Error("Failed to generate content");
+    }
 
-      if (postError) throw postError;
+    const content = completion.choices[0].message.content;
+    console.log("Content generated successfully");
 
-      // Insert the sources
-      if (post.sources && post.sources.length > 0) {
-        const { error: sourcesError } = await supabase
-          .from('post_sources')
-          .insert(
-            post.sources.map(source => ({
-              linkedin_post_id: savedPost.id,
-              title: source.title,
-              url: source.url,
-              publication_date: source.publication_date,
-            }))
-          );
+    // Split the content into individual posts
+    const posts = content.split(/Post \d+:/).filter(Boolean);
+    console.log(`Split response into ${posts.length} posts`);
 
-        if (sourcesError) throw sourcesError;
+    // Initialize Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+    const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+    console.log("Supabase client initialized");
+
+    // Save each post
+    const savedPosts = [];
+    for (const postContent of posts) {
+      try {
+        // Extract hashtags from content
+        const hashtagRegex = /#[\w]+/g;
+        const hashtags = postContent.match(hashtagRegex) || [];
+        
+        // Clean up the content
+        const cleanContent = postContent.trim();
+
+        console.log("Saving post to database");
+        const { data, error } = await supabase
+          .from('linkedin_posts')
+          .insert({
+            user_id: userId,
+            content: cleanContent,
+            topic,
+            hashtags,
+            version_group: crypto.randomUUID(),
+            is_current_version: true,
+          })
+          .select()
+          .single();
+
+        if (error) {
+          console.error("Error saving post:", error);
+          throw error;
+        }
+
+        savedPosts.push(data);
+        console.log("Post saved successfully");
+      } catch (error) {
+        console.error("Error processing post:", error);
+        throw error;
       }
+    }
 
-      return savedPost;
-    }));
-
-    // Return the successful response
+    console.log("All posts saved successfully");
     return new Response(
-      JSON.stringify({ success: true, posts: savedPosts }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ 
+        success: true, 
+        posts: savedPosts
+      }),
+      {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+        status: 200,
+      }
     );
 
   } catch (error) {
-    console.error('Error in generate-linkedin-post function:', error);
+    console.error("Error in generate-linkedin-post function:", error);
     return new Response(
-      JSON.stringify({ error: error.message || 'An unknown error occurred' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({
+        error: error.message || "An unexpected error occurred",
+      }),
+      {
+        status: 500,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+        },
+      }
     );
   }
 });
+
