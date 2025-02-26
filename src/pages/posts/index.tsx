@@ -1,3 +1,4 @@
+
 import React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -63,7 +64,11 @@ export default function Posts() {
       
       console.log("Fetched posts:", data);
       return data as Post[];
-    }
+    },
+    enabled: !!user,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
+    staleTime: 0 // Consider data stale immediately
   });
 
   const handleCopyToClipboard = async (content: string) => {
