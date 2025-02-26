@@ -1,46 +1,28 @@
 
-import { OpenAI } from "https://esm.sh/openai@4.24.1";
+import { AIResponse } from './types.ts';
 
-const openai = new OpenAI({
-  apiKey: Deno.env.get('OPENAI_API_KEY'),
-});
-
-export async function generateImage(prompt: string): Promise<string | null> {
-  try {
-    console.log('Generating image with prompt:', prompt);
-    const response = await openai.images.generate({
-      model: "dall-e-3",
-      prompt: prompt,
-      n: 1,
-      size: "1024x1024",
-      quality: "standard",
-    });
-
-    console.log('Image generation response:', response.data[0]?.url ? 'Success' : 'No URL returned');
-    return response.data[0]?.url || null;
-  } catch (error) {
-    console.error('Error generating image:', error);
-    return null;
-  }
-}
-
-export async function generateContent(prompt: string, systemPrompt: string): Promise<string> {
-  try {
-    console.log('Generating content with prompt:', { systemPrompt, prompt });
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+export async function generateContent(
+  openAIApiKey: string,
+  systemPrompt: string,
+  userPrompt: string
+): Promise<AIResponse> {
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${openAIApiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o',
       messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: prompt }
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
       ],
-    });
+      temperature: 0.7,
+      response_format: { type: "json_object" }
+    }),
+  });
 
-    const content = completion.choices[0].message.content || '';
-    console.log('Content generation successful:', content.substring(0, 50) + '...');
-    return content;
-  } catch (error) {
-    console.error('Error generating content:', error);
-    throw error;
-  }
+  const completion = await response.json();
+  return JSON.parse(completion.choices[0]?.message?.content || '{"posts":[], "styleAnalysis":{}}');
 }
-

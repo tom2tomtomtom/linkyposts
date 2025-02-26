@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Loader2, ImagePlus } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 interface FormData {
   topic: string;
@@ -27,7 +27,6 @@ interface FormData {
   industry: string;
   numPosts: number;
   includeNews: boolean;
-  generateImage: boolean;
 }
 
 const initialFormData: FormData = {
@@ -38,7 +37,6 @@ const initialFormData: FormData = {
   industry: "",
   numPosts: 3,
   includeNews: true,
-  generateImage: false,
 };
 
 export default function GeneratePost() {
@@ -47,7 +45,6 @@ export default function GeneratePost() {
   const [formData, setFormData] = useState<FormData>(initialFormData);
   const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
 
   useEffect(() => {
     async function loadUserPreferences() {
@@ -109,7 +106,6 @@ export default function GeneratePost() {
           industry: formData.industry,
           numPosts: formData.numPosts,
           includeNews: formData.includeNews,
-          generateImage: formData.generateImage,
         },
       });
 
@@ -122,26 +118,6 @@ export default function GeneratePost() {
       toast.error(error.message || "Failed to generate posts");
     } finally {
       setIsGenerating(false);
-    }
-  };
-
-  const handleGenerateImage = async () => {
-    if (!formData.topic) {
-      toast.error("Please enter a topic first");
-      return;
-    }
-
-    setIsGeneratingImage(true);
-    setFormData(prev => ({ ...prev, generateImage: true }));
-
-    try {
-      await handleSubmit({ preventDefault: () => {} } as React.FormEvent);
-    } catch (error) {
-      console.error("Error generating image:", error);
-      toast.error("Failed to generate image");
-    } finally {
-      setIsGeneratingImage(false);
-      setFormData(prev => ({ ...prev, generateImage: false }));
     }
   };
 
@@ -279,40 +255,19 @@ export default function GeneratePost() {
               <Label htmlFor="includeNews">Include recent news and trends</Label>
             </div>
 
-            <div className="flex gap-4">
-              <Button type="submit" disabled={isGenerating || !formData.topic} className="flex-1">
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generating Posts...
-                  </>
-                ) : (
-                  "Generate LinkedIn Posts"
-                )}
-              </Button>
-              <Button
-                type="button"
-                onClick={handleGenerateImage}
-                disabled={isGeneratingImage || !formData.topic}
-                variant="secondary"
-              >
-                {isGeneratingImage ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generating Image...
-                  </>
-                ) : (
-                  <>
-                    <ImagePlus className="mr-2 h-4 w-4" />
-                    Generate Image
-                  </>
-                )}
-              </Button>
-            </div>
+            <Button type="submit" disabled={isGenerating || !formData.topic} className="w-full">
+              {isGenerating ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Generating Posts...
+                </>
+              ) : (
+                "Generate LinkedIn Posts"
+              )}
+            </Button>
           </form>
         </Card>
       </div>
     </div>
   );
 }
-
