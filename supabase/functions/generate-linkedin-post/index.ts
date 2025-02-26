@@ -1,9 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
-import { extractArticleContent, findRelatedArticles } from "./news.ts";
-import { createDbClient, saveGeneratedContent, saveLinkedInPosts } from "./database.ts";
-import { generateAnalysis } from "./openai.ts";
+import { extractArticle } from "npm:@extractus/article-extractor";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,146 +9,144 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS preflight requests
+  // Handle CORS
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Validate request body
-    const body = await req.json().catch(() => null);
-    console.log("Received request body:", body);
+    // Parse request
+    const { userId, topic, tone = "", pov = "", writingSample = "", industry = "", numPosts = 3, includeNews = true } = await req.json();
+    console.log("Received request:", { userId, topic, tone, pov, numPosts, includeNews });
 
-    if (!body || !body.userId || !body.topic) {
-      console.error("Missing required parameters:", { body });
+    if (!userId || !topic) {
       throw new Error('Missing required parameters: userId and topic are required');
     }
 
-    const { 
-      userId, 
-      topic, 
-      tone = "", 
-      pov = "", 
-      writingSample = "", 
-      industry = "", 
-      numPosts = 3, 
-      includeNews = true 
-    } = body;
+    // Initialize variables for content generation
+    let mainContent = topic;
+    let context = "";
 
-    console.log("Processing request with params:", {
-      userId,
-      topic,
-      tone,
-      pov,
-      writingSample: writingSample ? "provided" : "not provided",
-      industry,
-      numPosts,
-      includeNews
-    });
-
-    let mainArticle = null;
-    let relatedArticles = [];
-
-    // Check if the topic is a URL
+    // Handle URL input
     const isUrl = topic.startsWith('http://') || topic.startsWith('https://');
     if (isUrl) {
-      console.log("Topic is a URL, attempting to extract content...");
       try {
-        mainArticle = await extractArticleContent(topic);
-        if (!mainArticle) {
-          console.error("Failed to extract article content from URL:", topic);
+        console.log("Extracting content from URL:", topic);
+        const article = await extractArticle(topic);
+        
+        if (!article) {
           throw new Error('Failed to extract article content');
         }
-        console.log("Successfully extracted article content:", {
-          title: mainArticle.title,
-          contentLength: mainArticle.content.length,
-          url: mainArticle.url
-        });
 
-        if (includeNews) {
-          console.log("Fetching related articles...");
-          relatedArticles = await findRelatedArticles(mainArticle.title);
-          console.log(`Found ${relatedArticles.length} related articles`);
-        }
+        mainContent = article.title || topic;
+        context = article.content || "";
+        console.log("Successfully extracted article:", {
+          title: article.title,
+          contentLength: context.length
+        });
       } catch (error) {
-        console.error("Error processing article URL:", error);
-        throw new Error(`Failed to process article: ${error.message}`);
+        console.error("Error extracting article:", error);
+        throw new Error(`Failed to extract article content: ${error.message}`);
       }
     }
 
-    // Initialize Supabase client
-    console.log("Initializing Supabase client...");
-    const supabase = createDbClient();
+    // Prepare prompt for OpenAI
+    const systemPrompt = `You are an expert LinkedIn content strategist who creates engaging, professional posts.
+Key requirements for EACH post:
+- Minimum 300 words
+- Clear structure: hook, main points, conclusion
+- Professional yet conversational tone
+- 2-3 relevant hashtags
+- Strategic use of emojis (2-3 per post)
+- End with a thought-provoking question
+- Focus on insights and professional value
 
-    // Get user preferences
-    console.log("Fetching user preferences for userId:", userId);
-    const { data: preferences, error: preferencesError } = await supabase
-      .from('user_preferences')
-      .select('*')
-      .eq('user_id', userId)
-      .maybeSingle();
+Writing style preferences:
+${tone ? `- Tone: ${tone}` : ""}
+${pov ? `- Point of view: ${pov}` : ""}
+${industry ? `- Industry context: ${industry}` : ""}
+${writingSample ? `- Match this writing style: ${writingSample}` : ""}`;
 
-    if (preferencesError) {
-      console.error("Error fetching user preferences:", preferencesError);
-      throw preferencesError;
+    const userPrompt = context 
+      ? `Create ${numPosts} LinkedIn posts based on this article: "${mainContent}"
+
+Article content:
+${context}
+
+Make each post unique, focusing on different aspects or insights from the article.`
+      : `Create ${numPosts} engaging LinkedIn posts about: ${mainContent}
+
+Make each post unique, offering different perspectives or insights about the topic.`;
+
+    // Generate content using OpenAI
+    console.log("Calling OpenAI with prompt length:", userPrompt.length);
+    const openAIResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt }
+        ],
+        temperature: 0.7,
+        max_tokens: 2500,
+      }),
+    });
+
+    if (!openAIResponse.ok) {
+      const error = await openAIResponse.text();
+      console.error("OpenAI API error:", error);
+      throw new Error(`OpenAI API error: ${error}`);
     }
 
-    console.log("User preferences:", preferences);
+    const openAIData = await openAIResponse.json();
+    const generatedContent = openAIData.choices[0]?.message?.content;
 
-    const defaultTone = tone || preferences?.default_tone || 'professional';
-    const defaultPov = pov || preferences?.default_pov || 'first person';
-    const userIndustry = industry || preferences?.industry || '';
+    if (!generatedContent) {
+      throw new Error('No content generated from OpenAI');
+    }
 
-    console.log("Starting content generation with settings:", {
-      defaultTone,
-      defaultPov,
-      userIndustry,
-      hasMainArticle: !!mainArticle,
-      numRelatedArticles: relatedArticles.length
-    });
+    // Split and validate posts
+    const posts = generatedContent
+      .split(/\n{2,}/)
+      .filter(post => {
+        const wordCount = post.trim().split(/\s+/).length;
+        const hasHashtags = /#[\w-]+/.test(post);
+        const hasEmoji = /[\p{Emoji}]/u.test(post);
+        const hasQuestion = /\?/.test(post);
+        
+        return wordCount >= 300 && hasHashtags && hasEmoji && hasQuestion;
+      })
+      .map(post => post.trim());
 
-    // Generate posts using OpenAI
-    const posts = await generateAnalysis(topic, {
-      mainArticle,
-      relatedArticles,
-      tone: defaultTone,
-      pov: defaultPov,
-      industry: userIndustry,
-      writingSample
-    });
+    if (posts.length === 0) {
+      console.error("Generated content failed validation:", generatedContent);
+      throw new Error('Generated content did not meet quality standards');
+    }
 
-    console.log(`Successfully generated ${posts.length} posts`);
+    console.log(`Successfully generated ${posts.length} valid posts`);
 
-    // Save generated content
-    console.log("Saving generated content...");
-    const generatedContentId = await saveGeneratedContent(
-      supabase,
-      userId,
-      isUrl ? mainArticle?.title || topic : topic,
-      defaultTone,
-      defaultPov,
-      writingSample,
-      { tone: defaultTone, pov: defaultPov }
+    return new Response(
+      JSON.stringify({ 
+        success: true, 
+        posts 
+      }), 
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      }
     );
-
-    console.log("Content saved with ID:", generatedContentId);
-
-    // Save the posts
-    console.log("Saving generated posts...");
-    await saveLinkedInPosts(supabase, userId, generatedContentId, posts);
-
-    console.log("Successfully completed post generation process");
-
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
   } catch (error) {
     console.error("Error in generate-linkedin-post function:", error);
     return new Response(
       JSON.stringify({ 
         error: error.message || 'An unexpected error occurred',
         timestamp: new Date().toISOString()
-      }), {
+      }), 
+      {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       }
