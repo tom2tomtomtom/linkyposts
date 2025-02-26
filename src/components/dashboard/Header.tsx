@@ -66,7 +66,7 @@ export function Header() {
           <div className="flex">
             <div className="flex-shrink-0 flex items-center">
               <Link to="/dashboard" className="text-xl font-bold text-[#0A66C2]">
-                LinkedIn Posts
+                Linkies
               </Link>
             </div>
             <nav className="hidden sm:ml-6 sm:flex sm:space-x-8">
@@ -144,3 +144,4 @@ export function Header() {
     </header>
   )
 }
+
