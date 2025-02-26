@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { Copy, Edit, Trash2, CalendarClock, CheckSquare, FileEdit } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -23,7 +23,15 @@ type PostStatus = "all" | "draft" | "scheduled" | "published";
 export default function Posts() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [selectedStatus, setSelectedStatus] = React.useState<PostStatus>("all");
+  const [searchParams] = useSearchParams();
+  const filterFromUrl = searchParams.get("filter") as PostStatus | null;
+  const [selectedStatus, setSelectedStatus] = React.useState<PostStatus>(filterFromUrl || "all");
+
+  React.useEffect(() => {
+    if (filterFromUrl && filterFromUrl !== selectedStatus) {
+      setSelectedStatus(filterFromUrl as PostStatus);
+    }
+  }, [filterFromUrl]);
 
   const { data: posts, isLoading } = useQuery({
     queryKey: ["posts", user?.id, selectedStatus],

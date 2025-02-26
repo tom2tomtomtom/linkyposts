@@ -161,10 +161,10 @@ export default function Dashboard() {
               <Button
                 variant="secondary"
                 className="w-full justify-start"
-                onClick={() => navigate("/settings")}
+                onClick={() => navigate("/posts?filter=scheduled")}
               >
                 <CalendarClock className="mr-2" />
-                Schedule Posts
+                View Scheduled Posts
               </Button>
             </div>
           </Card>
