@@ -86,6 +86,7 @@ export default function GeneratePost() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log("Starting post generation...");
 
     if (!user) {
       toast.error("You must be logged in to generate posts");
@@ -98,6 +99,10 @@ export default function GeneratePost() {
     }
 
     setIsGenerating(true);
+    console.log("Sending request to edge function with data:", {
+      userId: user.id,
+      ...formData,
+    });
 
     try {
       const { data, error } = await supabase.functions.invoke("generate-linkedin-post", {
@@ -113,10 +118,16 @@ export default function GeneratePost() {
         },
       });
 
-      if (error) throw error;
+      console.log("Response from edge function:", { data, error });
+
+      if (error) {
+        console.error("Edge function error:", error);
+        throw error;
+      }
       
       if (!data?.success || !data?.posts) {
-        throw new Error(data?.error || 'Failed to generate posts');
+        console.error("Invalid response format:", data);
+        throw new Error(data?.error || 'Failed to generate posts: Invalid response format');
       }
 
       toast.success("Posts generated successfully!");
@@ -125,9 +136,9 @@ export default function GeneratePost() {
       console.error("Error generating posts:", error);
       const errorMessage = error.message || "Failed to generate posts";
       
-      if (error.message?.includes('Failed to fetch') || error.message?.includes('Failed to send')) {
+      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('Failed to send')) {
         toast.error("Network error. Please try again in a few moments.");
-      } else if (error.message?.includes('extract article')) {
+      } else if (errorMessage.includes('extract article')) {
         toast.error("Could not extract article content. Please try a different URL or enter your topic directly.");
       } else {
         toast.error(errorMessage);
