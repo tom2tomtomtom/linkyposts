@@ -7,15 +7,17 @@ import { supabase } from "@/integrations/supabase/client";
 import { CalendarClock, CheckCircle, FileEdit } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
   // Query to fetch post statistics
-  const { data: stats, isLoading: statsLoading } = useQuery({
+  const { data: stats, isLoading: statsLoading, error: statsError } = useQuery({
     queryKey: ["postStats", user?.id],
     queryFn: async () => {
+      console.log("Fetching stats for user:", user?.id);
       if (!user) throw new Error("No user");
       
       const { data: posts, error } = await supabase
@@ -24,11 +26,15 @@ export default function Dashboard() {
         .eq("user_id", user.id)
         .eq("is_current_version", true);
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error fetching stats:", error);
+        throw error;
+      }
+
+      console.log("Fetched posts for stats:", posts);
 
       const total = posts.length;
       const published = posts.filter(post => post.published_at).length;
-      // Only count as scheduled if it has a scheduled_for date but hasn't been published yet
       const scheduled = posts.filter(post => post.scheduled_for && !post.published_at).length;
       const drafts = total - published - scheduled;
 
@@ -38,9 +44,10 @@ export default function Dashboard() {
   });
 
   // Query to fetch recent posts
-  const { data: recentPosts, isLoading: postsLoading } = useQuery({
+  const { data: recentPosts, isLoading: postsLoading, error: postsError } = useQuery({
     queryKey: ["recentPosts", user?.id],
     queryFn: async () => {
+      console.log("Fetching recent posts for user:", user?.id);
       if (!user) throw new Error("No user");
       
       const { data, error } = await supabase
@@ -48,20 +55,39 @@ export default function Dashboard() {
         .select(`
           id,
           content,
+          hook,
           published_at,
           scheduled_for,
-          created_at
+          created_at,
+          news_reference
         `)
         .eq("user_id", user.id)
         .eq("is_current_version", true)
         .order("created_at", { ascending: false })
         .limit(5);
 
-      if (error) throw error;
+      if (error) {
+        console.error("Error fetching recent posts:", error);
+        throw error;
+      }
+
+      console.log("Fetched recent posts:", data);
       return data;
     },
     enabled: !!user,
   });
+
+  // Show errors using toast if they occur
+  React.useEffect(() => {
+    if (statsError) {
+      toast.error("Failed to load post statistics");
+      console.error("Stats error:", statsError);
+    }
+    if (postsError) {
+      toast.error("Failed to load recent posts");
+      console.error("Posts error:", postsError);
+    }
+  }, [statsError, postsError]);
 
   const getPostStatus = (post: any) => {
     if (post.published_at) return "Published";
@@ -126,11 +152,17 @@ export default function Dashboard() {
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
+                        {post.hook && (
+                          <p className="font-medium text-lg mb-2 text-blue-600">{post.hook}</p>
+                        )}
                         <p className="line-clamp-2">{post.content}</p>
                         <div className="mt-2 flex items-center gap-2 text-sm">
                           <span className={getStatusColor(getPostStatus(post))}>
                             {getPostStatus(post)}
                           </span>
+                          {post.news_reference && (
+                            <span className="text-purple-600">• Based on news article</span>
+                          )}
                         </div>
                       </div>
                     </div>
