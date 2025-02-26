@@ -49,8 +49,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           
           if (_event === 'SIGNED_IN') {
             navigate('/dashboard');
+            toast.success('Successfully signed in!');
           } else if (_event === 'SIGNED_OUT') {
             navigate('/');
+            toast.success('Successfully signed out');
           }
         } catch (error) {
           console.error('Auth state change error:', error);
@@ -105,7 +107,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
-      toast.success('Signed out successfully');
     } catch (error: any) {
       toast.error(error.message);
       throw error;
@@ -122,7 +123,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
-            scope: 'https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile',
           },
           redirectTo: window.location.origin + '/auth/callback'
         }
@@ -130,6 +130,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (error) {
         console.error('Google sign in error:', error);
+        toast.error('Failed to sign in with Google');
         throw error;
       }
     } catch (error: any) {
