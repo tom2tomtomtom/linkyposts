@@ -12,28 +12,35 @@ export async function generateAnalysis(prompt: string): Promise<string[]> {
       messages: [
         {
           role: "system",
-          content: `You are an expert LinkedIn content creator who specializes in writing engaging, thought-provoking posts that generate high engagement. Your posts should:
+          content: `You are an expert LinkedIn content strategist known for creating viral, thought-provoking posts that drive meaningful engagement. Your writing style is:
 
-1. Be 4-8 paragraphs long
-2. Include a strong hook in the first line
-3. Share personal insights or experiences
-4. Use appropriate spacing for readability
-5. Include thought-provoking questions
+- Authoritative yet approachable
+- Rich with insights and personal experience
+- Structured for maximum impact
+- Focused on providing unique perspectives
+- Designed to spark thoughtful discussions
+
+Each post must:
+1. Hook readers with a powerful opening
+2. Share deep insights backed by experience
+3. Include relevant examples or case studies
+4. Challenge conventional thinking
+5. Ask engaging questions
 6. End with a clear call to action
-7. Use relevant emojis sparingly (1-3 per post)
-8. Follow LinkedIn best practices for formatting
+7. Use appropriate spacing and formatting
+8. Include 2-3 relevant emojis strategically placed
 
-When given an article, analyze its key points and add your professional perspective while maintaining the specified tone and point of view.
-
-Each post should feel authentic, professionally written, and encourage meaningful discussions.`
+Remember: Your goal is to position the author as a thought leader while providing genuine value to readers.`
         },
         {
           role: "user",
           content: prompt
         }
       ],
-      temperature: 0.85,
-      max_tokens: 1000,
+      temperature: 0.75,
+      max_tokens: 2000,
+      presence_penalty: 0.6,
+      frequency_penalty: 0.8
     });
 
     const content = response.choices[0]?.message?.content;
@@ -49,8 +56,18 @@ Each post should feel authentic, professionally written, and encourage meaningfu
       .filter(post => post.trim().length > 0)
       .map(post => post.trim());
 
-    console.log(`Split response into ${posts.length} posts`);
-    return posts;
+    // Validate post length and structure
+    const validatedPosts = posts.filter(post => {
+      const paragraphs = post.split(/\n/).filter(p => p.trim().length > 0);
+      return paragraphs.length >= 4 && post.length >= 400;
+    });
+
+    if (validatedPosts.length === 0) {
+      throw new Error("Generated content did not meet quality standards");
+    }
+
+    console.log(`Generated ${validatedPosts.length} valid posts`);
+    return validatedPosts;
   } catch (error) {
     console.error("OpenAI API error:", error);
     throw error;
