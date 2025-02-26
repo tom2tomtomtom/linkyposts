@@ -28,6 +28,7 @@ export default function Dashboard() {
 
       const total = posts.length;
       const published = posts.filter(post => post.published_at).length;
+      // Only count as scheduled if it has a scheduled_for date but hasn't been published yet
       const scheduled = posts.filter(post => post.scheduled_for && !post.published_at).length;
       const drafts = total - published - scheduled;
 
@@ -64,7 +65,7 @@ export default function Dashboard() {
 
   const getPostStatus = (post: any) => {
     if (post.published_at) return "Published";
-    if (post.scheduled_for) return "Scheduled";
+    if (post.scheduled_for && !post.published_at) return "Scheduled";
     return "Draft";
   };
 
