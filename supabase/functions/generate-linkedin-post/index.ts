@@ -9,14 +9,17 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  console.log("Received request to generate-linkedin-post");
+
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
+    console.log("Handling CORS preflight request");
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
     const { userId, topic, tone = "", pov = "", writingSample = "", industry = "", numPosts = 3, includeNews = true } = await req.json();
-    console.log("Received request:", { userId, topic, tone, pov, numPosts, includeNews });
+    console.log("Request payload:", { userId, topic, tone, pov, numPosts, includeNews });
 
     if (!userId || !topic) {
       throw new Error('Missing required parameters: userId and topic are required');
@@ -49,14 +52,7 @@ serve(async (req) => {
         });
       } catch (error) {
         console.error("Error extracting article:", error);
-        return new Response(
-          JSON.stringify({ 
-            error: 'Failed to extract article content. Please try again with a different URL or enter your topic directly.' 
-          }), {
-            status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-          }
-        );
+        throw new Error('Failed to extract article content. Please try a different URL or enter your topic directly.');
       }
     }
 
@@ -88,7 +84,7 @@ Make each post unique, focusing on different aspects or insights from the articl
 
 Make each post unique, offering different perspectives or insights about the topic.`;
 
-    console.log("Sending prompt to OpenAI:", userPrompt);
+    console.log("Sending prompt to OpenAI");
     
     // Generate content using OpenAI with timeout
     const controller = new AbortController();
@@ -128,6 +124,8 @@ Make each post unique, offering different perspectives or insights about the top
         throw new Error('No content generated from OpenAI');
       }
 
+      console.log("Successfully generated content from OpenAI");
+
       // Split and validate posts
       const posts = generatedContent
         .split(/\n{2,}/)
@@ -165,6 +163,7 @@ Make each post unique, offering different perspectives or insights about the top
     console.error("Error in generate-linkedin-post function:", error);
     return new Response(
       JSON.stringify({ 
+        success: false,
         error: error.message || 'An unexpected error occurred',
         timestamp: new Date().toISOString()
       }), 
@@ -175,4 +174,3 @@ Make each post unique, offering different perspectives or insights about the top
     );
   }
 });
-
