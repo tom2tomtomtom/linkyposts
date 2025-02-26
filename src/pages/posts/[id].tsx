@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { connectLinkedIn, publishToLinkedIn } from "@/utils/linkedinAuth";
+import { Input } from "@/components/ui/input";
 
 export default function PostDetail() {
   const { id } = useParams();
@@ -17,6 +18,7 @@ export default function PostDetail() {
   const queryClient = useQueryClient();
   const [isPublishing, setIsPublishing] = React.useState(false);
   const [isGeneratingImage, setIsGeneratingImage] = React.useState(false);
+  const [imagePrompt, setImagePrompt] = React.useState("");
 
   const { data: post, isLoading } = useQuery({
     queryKey: ["post", id],
@@ -84,12 +86,15 @@ export default function PostDetail() {
   };
 
   const handleGenerateImage = async () => {
-    if (!id || !post?.topic || !user?.id) return;
+    if (!id || !user?.id || !imagePrompt.trim()) {
+      toast.error("Please enter an image prompt");
+      return;
+    }
 
     try {
       setIsGeneratingImage(true);
       const { data, error } = await supabase.functions.invoke("generate-post-image", {
-        body: { postId: id, topic: post.topic }
+        body: { postId: id, prompt: imagePrompt.trim() }
       });
 
       if (error) throw error;
@@ -104,6 +109,7 @@ export default function PostDetail() {
 
         queryClient.invalidateQueries({ queryKey: ["post", id] });
         toast.success("Image generated successfully");
+        setImagePrompt(""); // Clear the prompt after successful generation
       }
     } catch (error: any) {
       console.error("Error generating image:", error);
@@ -188,8 +194,8 @@ export default function PostDetail() {
       <Card className="p-6">
         <div className="flex justify-between items-start mb-6">
           <div>
-            <h1 className="text-2xl font-bold mb-2">{post.topic || "Untitled Post"}</h1>
-            {post.hook && (
+            <h1 className="text-2xl font-bold mb-2">{post?.topic || "Untitled Post"}</h1>
+            {post?.hook && (
               <p className="text-blue-600 mb-4">{post.hook}</p>
             )}
           </div>
@@ -208,18 +214,26 @@ export default function PostDetail() {
               <PencilIcon className="w-4 h-4 mr-2" />
               Edit
             </Button>
-            <Button
-              variant="secondary"
-              onClick={handleGenerateImage}
-              disabled={isGeneratingImage}
-            >
-              {isGeneratingImage ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <ImagePlus className="w-4 h-4 mr-2" />
-              )}
-              Generate Image
-            </Button>
+            <div className="flex gap-2 items-center">
+              <Input
+                placeholder="Enter image prompt"
+                value={imagePrompt}
+                onChange={(e) => setImagePrompt(e.target.value)}
+                className="w-64"
+              />
+              <Button
+                variant="secondary"
+                onClick={handleGenerateImage}
+                disabled={isGeneratingImage}
+              >
+                {isGeneratingImage ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <ImagePlus className="w-4 h-4 mr-2" />
+                )}
+                Generate Image
+              </Button>
+            </div>
             <Button
               variant="destructive"
               onClick={handleDelete}
@@ -229,27 +243,27 @@ export default function PostDetail() {
             </Button>
             <Button
               onClick={handlePublish}
-              disabled={isPublishing || !!post.linkedin_post_id}
+              disabled={isPublishing || !!post?.linkedin_post_id}
             >
               {isPublishing ? (
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               ) : (
                 <Share2 className="w-4 h-4 mr-2" />
               )}
-              {post.linkedin_post_id ? "Published" : "Publish to LinkedIn"}
+              {post?.linkedin_post_id ? "Published" : "Publish to LinkedIn"}
             </Button>
           </div>
         </div>
         
-        {post.image_url && (
+        {post?.image_url && (
           <div className="mb-6">
             <img src={post.image_url} alt="Post illustration" className="rounded-lg w-full max-w-2xl mx-auto" />
           </div>
         )}
         
-        <div className="whitespace-pre-wrap">{post.content}</div>
+        <div className="whitespace-pre-wrap">{post?.content}</div>
         
-        {post.hashtags && post.hashtags.length > 0 && (
+        {post?.hashtags && post.hashtags.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-2">
             {post.hashtags.map((tag: string) => (
               <span
