@@ -1,5 +1,5 @@
 
-import LoginForm from "@/components/auth/LoginForm";
+import LinkedInLoginButton from "@/components/auth/LinkedInLoginButton";
 
 export default function LoginPage() {
   return (
@@ -12,7 +12,12 @@ export default function LoginPage() {
           </p>
         </div>
         
-        <LoginForm />
+        <div className="mt-8 space-y-6">
+          <LinkedInLoginButton />
+          <p className="text-center text-sm text-muted-foreground">
+            Connect with LinkedIn to start generating engaging posts
+          </p>
+        </div>
       </div>
     </div>
   );
