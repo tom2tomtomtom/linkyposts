@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
@@ -50,15 +50,17 @@ export default function PostDetail() {
       if (error) throw error;
       return data as Post;
     },
-    enabled: !!user && !!id,
-    meta: {
-      onSuccess: (data: Post) => {
-        setContent(data.content);
-        setTopic(data.topic || "");
-        setHashtags(data.hashtags?.join(" ") || "");
-      }
-    }
+    enabled: !!user && !!id
   });
+
+  // Update form state when post data changes or edit mode is enabled
+  useEffect(() => {
+    if (post) {
+      setContent(post.content);
+      setTopic(post.topic || "");
+      setHashtags(post.hashtags?.join(" ") || "");
+    }
+  }, [post, isEditing]);
 
   const updateMutation = useMutation({
     mutationFn: async (updatedPost: Partial<Post>) => {
