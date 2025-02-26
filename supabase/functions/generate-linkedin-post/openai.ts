@@ -25,7 +25,7 @@ export async function generateImage(prompt: string): Promise<string | null> {
 export async function generateContent(prompt: string, systemPrompt: string): Promise<string> {
   try {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
+      model: "gpt-4",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: prompt }
