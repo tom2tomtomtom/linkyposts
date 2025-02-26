@@ -57,6 +57,7 @@ export type Database = {
           created_at: string | null
           expires_at: string
           id: string
+          linkedin_user_id: string | null
           refresh_token: string | null
           updated_at: string | null
           user_id: string
@@ -66,6 +67,7 @@ export type Database = {
           created_at?: string | null
           expires_at: string
           id?: string
+          linkedin_user_id?: string | null
           refresh_token?: string | null
           updated_at?: string | null
           user_id: string
@@ -75,6 +77,7 @@ export type Database = {
           created_at?: string | null
           expires_at?: string
           id?: string
+          linkedin_user_id?: string | null
           refresh_token?: string | null
           updated_at?: string | null
           user_id?: string

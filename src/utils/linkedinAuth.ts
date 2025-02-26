@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 export async function connectLinkedIn() {
@@ -123,8 +124,8 @@ export async function publishToLinkedIn(postContent: string, userId: string) {
   try {
     // First try to get or refresh token
     const token = await refreshLinkedInToken(userId);
-    if (!token?.access_token || !token.linkedin_user_id) {
-      throw new Error('No valid LinkedIn token or user ID found');
+    if (!token?.access_token) {
+      throw new Error('No valid LinkedIn token found');
     }
 
     // Now make the actual publish request using the edge function
@@ -143,3 +144,4 @@ export async function publishToLinkedIn(postContent: string, userId: string) {
     throw error;
   }
 }
+
