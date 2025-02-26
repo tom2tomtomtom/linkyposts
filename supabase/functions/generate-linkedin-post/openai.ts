@@ -1,18 +1,22 @@
 
-import { OpenAI } from "https://deno.land/x/openai@v4.20.1/mod.ts";
-
-const openai = new OpenAI(Deno.env.get('OPENAI_API_KEY')!);
+const OPENAI_API_URL = "https://api.openai.com/v1/chat/completions";
 
 export async function generateAnalysis(prompt: string): Promise<string[]> {
   try {
     console.log("Sending prompt to OpenAI:", prompt.slice(0, 500) + "...");
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        {
-          role: "system",
-          content: `You are an expert LinkedIn content strategist and thought leader who excels at:
+    const response = await fetch(OPENAI_API_URL, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: "gpt-4",
+        messages: [
+          {
+            role: "system",
+            content: `You are an expert LinkedIn content strategist and thought leader who excels at:
 1. Analyzing multiple sources to form unique, well-researched opinions
 2. Creating viral, thought-provoking posts that drive meaningful engagement
 3. Connecting ideas across different sources to provide fresh insights
@@ -46,24 +50,32 @@ Structure each post with:
 - Engaging question or call to action
 
 Remember: Your goal is to demonstrate thought leadership by synthesizing information from multiple sources into valuable insights for your audience.`
-        },
-        {
-          role: "user",
-          content: prompt
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 2000,
-      presence_penalty: 0.6,
-      frequency_penalty: 0.8
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 2000,
+        presence_penalty: 0.6,
+        frequency_penalty: 0.8
+      })
     });
 
-    const content = response.choices[0]?.message?.content;
+    if (!response.ok) {
+      const error = await response.text();
+      console.error("OpenAI API error:", error);
+      throw new Error(`OpenAI API error: ${error}`);
+    }
+
+    const data = await response.json();
+    console.log("Received response from OpenAI:", JSON.stringify(data).slice(0, 500) + "...");
+
+    const content = data.choices[0]?.message?.content;
     if (!content) {
       throw new Error("No content received from OpenAI");
     }
-
-    console.log("Received response from OpenAI:", content.slice(0, 500) + "...");
 
     // Split the response into individual posts
     const posts = content
@@ -74,7 +86,7 @@ Remember: Your goal is to demonstrate thought leadership by synthesizing informa
     // Validate post length and structure
     const validatedPosts = posts.filter(post => {
       const paragraphs = post.split(/\n/).filter(p => p.trim().length > 0);
-      return paragraphs.length >= 5 && post.length >= 500;
+      return paragraphs.length >= 3 && post.length >= 100;
     });
 
     if (validatedPosts.length === 0) {
