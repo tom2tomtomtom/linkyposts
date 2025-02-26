@@ -5,6 +5,7 @@ import Index from "@/pages/Index";
 import NotFound from "@/pages/NotFound";
 import LoginPage from "@/pages/auth/LoginPage";
 import SignupPage from "@/pages/auth/SignupPage";
+import Callback from "@/pages/auth/Callback";
 import Dashboard from "@/pages/dashboard";
 import Posts from "@/pages/posts";
 import GeneratePost from "@/pages/posts/generate";
@@ -62,6 +63,10 @@ export const router = createBrowserRouter([
       {
         path: "/",
         element: <Index />
+      },
+      {
+        path: "auth/callback",
+        element: <Callback />
       },
       {
         element: <PublicRoute />,
