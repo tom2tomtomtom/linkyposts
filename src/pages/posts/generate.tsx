@@ -18,6 +18,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
 interface FormData {
   topic: string;
@@ -43,42 +44,36 @@ export default function GeneratePost() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [formData, setFormData] = useState<FormData>(initialFormData);
-  const [isLoading, setIsLoading] = useState(true);
   const [isGenerating, setIsGenerating] = useState(false);
 
+  const { data: preferences, isLoading } = useQuery({
+    queryKey: ["user-preferences", user?.id],
+    queryFn: async () => {
+      if (!user) throw new Error("No user");
+
+      const { data, error } = await supabase
+        .from("user_preferences")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+
   useEffect(() => {
-    async function loadUserPreferences() {
-      if (!user) return;
-
-      try {
-        const { data, error } = await supabase
-          .from("user_preferences")
-          .select("*")
-          .eq("user_id", user.id)
-          .maybeSingle();
-
-        if (error && error.code !== "PGRST116") {
-          throw error;
-        }
-
-        if (data) {
-          setFormData((prev) => ({
-            ...prev,
-            tone: data.default_tone || "",
-            pov: data.default_pov || "",
-            writingSample: data.writing_sample || "",
-            industry: data.industry || "",
-          }));
-        }
-      } catch (error) {
-        console.error("Error loading user preferences:", error);
-      } finally {
-        setIsLoading(false);
-      }
+    if (preferences) {
+      setFormData((prev) => ({
+        ...prev,
+        tone: preferences.default_tone || "",
+        pov: preferences.default_pov || "",
+        writingSample: preferences.writing_sample || "",
+        industry: preferences.industry || "",
+      }));
     }
-
-    loadUserPreferences();
-  }, [user]);
+  }, [preferences]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
