@@ -1,6 +1,7 @@
 
 import { createClient } from '@supabase/supabase-js';
-import { OpenAI } from 'openai';
+import OpenAI from 'openai';
+import { Database } from '../_shared/database.types.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,9 +14,39 @@ const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
 // Initialize Supabase Admin Client
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+const supabase = createClient<Database>(supabaseUrl, supabaseServiceRoleKey);
 
 const stabilityApiKey = Deno.env.get('STABILITY_API_KEY');
+
+async function generateImagePrompt(content: string, topic: string | null): Promise<string> {
+  try {
+    const prompt = `Create a detailed image generation prompt for a LinkedIn post about: ${topic || 'professional content'}. 
+    The post content is: ${content?.substring(0, 200)}...
+    Make the prompt professional, modern, and visually appealing. Keep it under 400 characters.`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-3.5-turbo',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are an expert at creating image generation prompts that work well with Stable Diffusion. Create clear, descriptive prompts that will result in professional, business-appropriate images.'
+        },
+        { role: 'user', content: prompt }
+      ],
+      max_tokens: 200,
+      temperature: 0.7,
+    });
+
+    const imagePrompt = completion.choices[0]?.message?.content?.trim() || 
+      `Professional business visualization related to ${topic || 'business and technology'}`;
+    
+    console.log('Generated image prompt:', imagePrompt);
+    return imagePrompt;
+  } catch (error) {
+    console.error('Error generating image prompt:', error);
+    return `Professional business scene related to ${topic || 'business and technology'}`;
+  }
+}
 
 Deno.serve(async (req) => {
   // Handle CORS preflight requests
@@ -35,30 +66,11 @@ Deno.serve(async (req) => {
       throw new Error('Missing required parameters');
     }
 
-    // Generate image prompt if not provided
-    let imagePrompt = customPrompt;
-    if (!imagePrompt) {
-      console.log('Generating prompt with OpenAI...');
-      const chatCompletion = await openai.chat.completions.create({
-        model: 'gpt-4o-mini',
-        messages: [
-          {
-            role: 'system',
-            content: 'You are an expert at creating image generation prompts. Create detailed, vivid image prompts that will work well for professional LinkedIn posts.'
-          },
-          {
-            role: 'user',
-            content: `Create a detailed image prompt for a professional LinkedIn post about "${topic}". The image should be visually appealing and relevant to the post content. Post content: "${postContent.substring(0, 500)}..."`
-          }
-        ],
-        temperature: 0.7,
-      });
+    // Generate or use custom prompt
+    const imagePrompt = customPrompt || await generateImagePrompt(postContent, topic);
+    console.log('Final prompt:', imagePrompt);
 
-      imagePrompt = chatCompletion.choices[0]?.message?.content?.trim() || `Professional image related to ${topic}`;
-      console.log('Generated image prompt:', imagePrompt);
-    }
-
-    // Generate image with Stability AI
+    // Request image generation from Stability AI
     console.log('Requesting image generation from Stability AI...');
     const response = await fetch('https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image', {
       method: 'POST',
@@ -67,12 +79,16 @@ Deno.serve(async (req) => {
         'Authorization': `Bearer ${stabilityApiKey}`,
       },
       body: JSON.stringify({
-        text_prompts: [{ text: imagePrompt }],
+        text_prompts: [{ 
+          text: imagePrompt,
+          weight: 1
+        }],
         cfg_scale: 7,
         height: 1024,
         width: 1024,
         samples: 1,
         steps: 30,
+        style_preset: "digital-art"
       }),
     });
 
@@ -93,23 +109,7 @@ Deno.serve(async (req) => {
     const base64Image = responseData.artifacts[0].base64;
     const imageUrl = `data:image/png;base64,${base64Image}`;
 
-    console.log('Successfully generated image, saving metadata...');
-
-    // Save image metadata
-    const { error: dbError } = await supabase
-      .from('post_images')
-      .insert({
-        linkedin_post_id: postId,
-        user_id: userId,
-        image_url: imageUrl,
-        prompt: imagePrompt,
-        storage_path: `${userId}/${postId}_${Date.now()}.jpg`
-      });
-
-    if (dbError) {
-      console.error('Error saving image metadata:', dbError);
-      throw dbError;
-    }
+    console.log('Successfully generated image, updating post...');
 
     // Update post with image URL
     const { error: updateError } = await supabase
