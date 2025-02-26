@@ -8,13 +8,20 @@ export async function fetchRelevantNews(
   industry: string
 ): Promise<NewsArticle[]> {
   try {
-    const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+    // Calculate date 4 weeks ago
+    const fourWeeksAgo = new Date();
+    fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
+    
+    console.log('Fetching news articles since:', fourWeeksAgo.toISOString());
+    console.log('Searching for topic:', topic);
+    console.log('Industry filter:', industry);
+
     const { data: newsArticles, error: newsError } = await supabase
       .from('news_articles')
       .select('*')
       .or(`title.ilike.%${topic}%,content.ilike.%${topic}%`)
       .eq('industry', industry)
-      .gte('published_date', twoWeeksAgo)
+      .gte('published_date', fourWeeksAgo.toISOString())
       .order('published_date', { ascending: false })
       .limit(8);
 
@@ -23,7 +30,9 @@ export async function fetchRelevantNews(
       return [];
     }
 
-    return newsArticles.map(article => ({
+    console.log(`Found ${newsArticles?.length || 0} relevant news articles`);
+
+    return (newsArticles || []).map(article => ({
       title: article.title,
       source: article.source,
       url: article.url,
@@ -35,3 +44,4 @@ export async function fetchRelevantNews(
     return [];
   }
 }
+
