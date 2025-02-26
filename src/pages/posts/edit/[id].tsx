@@ -33,15 +33,17 @@ export default function EditPost() {
       if (error) throw error;
       return data;
     },
-    enabled: !!id,
-    onSuccess: (data) => {
-      if (data) {
-        setContent(data.content || "");
-        setTopic(data.topic || "");
-        setHashtags(data.hashtags || []);
-      }
-    }
+    enabled: !!id
   });
+
+  // Set initial form values when post data is loaded
+  React.useEffect(() => {
+    if (post) {
+      setContent(post.content || "");
+      setTopic(post.topic || "");
+      setHashtags(post.hashtags || []);
+    }
+  }, [post]);
 
   const updatePostMutation = useMutation({
     mutationFn: async () => {
@@ -205,4 +207,3 @@ export default function EditPost() {
     </div>
   );
 }
-
