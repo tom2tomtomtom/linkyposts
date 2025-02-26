@@ -11,6 +11,7 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -22,6 +23,7 @@ serve(async (req) => {
       tone = "",
       pov = "",
       writingSample = "",
+      industry = "",
       numPosts = 3,
       includeNews = true,
     } = await req.json();
@@ -50,6 +52,7 @@ serve(async (req) => {
         }
       } catch (error) {
         console.error("Error processing articles:", error);
+        throw new Error(`Failed to process article: ${error.message}`);
       }
     }
 
@@ -67,7 +70,7 @@ serve(async (req) => {
 
     const defaultTone = tone || preferences?.default_tone || 'professional';
     const defaultPov = pov || preferences?.default_pov || 'first person';
-    const industry = preferences?.industry || '';
+    const userIndustry = industry || preferences?.industry || '';
 
     let prompt = `Generate ${numPosts} unique LinkedIn posts`;
 
@@ -94,7 +97,7 @@ serve(async (req) => {
 
     prompt += `\nTone: ${defaultTone}`;
     prompt += `\nPoint of View: ${defaultPov}`;
-    if (industry) prompt += `\nIndustry Context: ${industry}`;
+    if (userIndustry) prompt += `\nIndustry Context: ${userIndustry}`;
     if (writingSample) prompt += `\nMatch this writing style: ${writingSample}`;
 
     console.log("Generating posts with configuration:", {
@@ -102,20 +105,18 @@ serve(async (req) => {
       numRelatedArticles: relatedArticles.length,
       tone: defaultTone,
       pov: defaultPov,
-      industry: !!industry,
+      industry: !!userIndustry,
       hasWritingSample: !!writingSample
     });
 
     const posts = await generateAnalysis(prompt);
+    console.log(`Successfully generated ${posts.length} posts`);
 
     if (!posts || !Array.isArray(posts)) {
       throw new Error("Invalid response from OpenAI");
     }
 
-    console.log(`Successfully generated ${posts.length} posts`);
-    console.log("Sample post preview:", posts[0]?.slice(0, 200));
-
-    // Save generated content first
+    // Save generated content
     const generatedContentId = await saveGeneratedContent(
       supabase,
       userId,
@@ -126,18 +127,22 @@ serve(async (req) => {
       { tone: defaultTone, pov: defaultPov }
     );
 
-    // Save the posts with reference to generated content
+    // Save the posts
     await saveLinkedInPosts(supabase, userId, generatedContentId, posts);
 
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({ success: true }), 
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
 
   } catch (error) {
     console.error("Error in generate-linkedin-post function:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({ error: error.message }), 
+      { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
   }
 });
