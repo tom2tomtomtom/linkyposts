@@ -1,5 +1,5 @@
 
-import SignupForm from "@/components/auth/SignupForm";
+import LinkedInLoginButton from "@/components/auth/LinkedInLoginButton";
 
 export default function SignupPage() {
   return (
@@ -12,8 +12,14 @@ export default function SignupPage() {
           </p>
         </div>
         
-        <SignupForm />
+        <div className="mt-8 space-y-6">
+          <LinkedInLoginButton />
+          <p className="text-center text-sm text-muted-foreground">
+            Connect with LinkedIn to create your account
+          </p>
+        </div>
       </div>
     </div>
   );
 }
+
