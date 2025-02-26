@@ -103,7 +103,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     setIsLoading(true);
     try {
-      await supabase.auth.signOut();
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
       toast.success('Signed out successfully');
     } catch (error: any) {
       toast.error(error.message);
@@ -114,21 +115,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signInWithGoogle = async () => {
-    setIsLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+          redirectTo: `${window.location.origin}/auth/callback`
+        }
       });
       
-      if (error) throw error;
+      if (error) {
+        throw error;
+      }
+
+      if (!data) {
+        throw new Error('No data returned from Google sign in');
+      }
     } catch (error: any) {
-      toast.error(error.message);
+      console.error('Google sign in error:', error);
+      toast.error(error.message || 'Failed to sign in with Google');
       throw error;
-    } finally {
-      setIsLoading(false);
     }
   };
 
