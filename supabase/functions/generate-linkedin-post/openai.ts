@@ -1,12 +1,5 @@
 
-import { Configuration, OpenAIApi } from "https://esm.sh/openai@4.11.1";
-import { generatePrompt } from "./prompts.ts";
-
-const openaiConfig = new Configuration({
-  apiKey: Deno.env.get('OPENAI_API_KEY'),
-});
-
-const openai = new OpenAIApi(openaiConfig);
+const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY');
 
 interface GeneratePostsParams {
   topic: string;
@@ -53,21 +46,34 @@ export async function generatePosts(params: GeneratePostsParams) {
       newsArticles,
     });
 
-    const completion = await openai.createChatCompletion({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content:
-            "You are a professional LinkedIn content writer that creates engaging posts.",
-        },
-        { role: "user", content: prompt },
-      ],
-      temperature: 0.7,
-      max_tokens: 2000,
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a professional LinkedIn content writer that creates engaging posts.',
+          },
+          { role: 'user', content: prompt },
+        ],
+        temperature: 0.7,
+        max_tokens: 2000,
+      }),
     });
 
-    const content = completion.data.choices[0]?.message?.content;
+    if (!response.ok) {
+      const error = await response.json();
+      console.error('OpenAI API error:', error);
+      throw new Error(error.error?.message || 'Failed to generate content');
+    }
+
+    const data = await response.json();
+    const content = data.choices[0]?.message?.content;
     if (!content) throw new Error("No content generated");
 
     // Parse the generated content into separate posts
@@ -91,3 +97,52 @@ export async function generatePosts(params: GeneratePostsParams) {
     throw error;
   }
 }
+
+interface PromptParams {
+  topic: string;
+  tone: string;
+  pov: string;
+  writingSample?: string;
+  industry?: string;
+  additionalContext?: string;
+  newsArticles?: any[];
+}
+
+function generatePrompt({
+  topic,
+  tone,
+  pov,
+  writingSample,
+  industry,
+  additionalContext,
+  newsArticles = [],
+}: PromptParams): string {
+  let prompt = `Write ${newsArticles.length > 1 ? 'multiple engaging' : 'an engaging'} LinkedIn post${newsArticles.length > 1 ? 's' : ''} about ${topic}.`;
+
+  if (additionalContext) {
+    prompt += `\n\nUse this article content as context:\n${additionalContext}`;
+  }
+
+  if (industry) {
+    prompt += `\n\nTarget audience: Professionals in the ${industry} industry.`;
+  }
+
+  prompt += `\n\nUse a ${tone} tone and write in the ${pov} point of view.`;
+
+  if (writingSample) {
+    prompt += `\n\nMatch this writing style:\n${writingSample}`;
+  }
+
+  if (newsArticles.length > 0) {
+    prompt += "\n\nIncorporate insights from these related articles:";
+    newsArticles.forEach((article) => {
+      prompt += `\n- ${article.title}`;
+      if (article.description) prompt += `\n  ${article.description}`;
+    });
+  }
+
+  prompt += "\n\nFormat each post using ===POST=== as a separator and include relevant hashtags after ===HASHTAGS=== for each post.";
+
+  return prompt;
+}
+
