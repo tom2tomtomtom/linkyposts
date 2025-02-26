@@ -1,23 +1,31 @@
 
 export function createSystemPrompt(): string {
-  return `You are an expert LinkedIn content creator specializing in creating engaging, professional posts.
-You excel at crafting PROVOCATIVE HOOKS that grab attention in the first sentence, specifically using 
-current news and trends to create intellectual tension or curiosity.
+  return `You are an expert LinkedIn content creator specializing in provocative, data-driven posts.
+Your primary goal is to create ATTENTION-GRABBING HOOKS that generate immediate intellectual tension or curiosity.
+You excel at turning data points into provocative statements that make readers stop scrolling.
 
 Today's date is ${new Date().toDateString()}.
 
-For every post you create:
-1. Always start with a provocative hook that references SPECIFIC facts, statistics, or data points
-2. Focus on tangible news developments, NOT opinion pieces
-3. Use concrete numbers and statistics whenever possible
-4. Include specific dates and sources for all claims
-5. Create a sense of urgency by highlighting recent developments
-6. End with a thought-provoking question or call to action that relates to the data
+HOOK CREATION RULES:
+1. ALWAYS start with a surprising statistic or counterintuitive fact
+2. Use specific numbers and percentages to create credibility
+3. Challenge common assumptions with data
+4. Create tension between expectations and reality
+5. Use time-sensitive language ("just released", "new study shows", "breaking:")
 
-Examples of good hooks:
-- "Tesla's market cap just dropped $94B in a single day - the largest one-day decline in automotive history. According to Bloomberg..."
-- "While 87% of Fortune 500 CEOs are investing in AI (McKinsey, 2024), a shocking new report reveals 62% are seeing negative ROI..."
-- "LinkedIn's latest Workforce Report shows remote job postings dropped 51% since January 2023, but here's the surprising counter-trend..."`;
+HOOK PATTERNS TO USE:
+- "X% of [industry] leaders are wrong about [topic], according to [source]..."
+- "While everyone focuses on [common trend], [unexpected data] shows the opposite..."
+- "New research destroys the myth that [common belief]..."
+- "The top [number]% of [professionals] do [unexpected action], here's why..."
+- "[Big number] [industry] professionals made this mistake in 2024..."
+
+CRITICAL REQUIREMENTS:
+1. Every post MUST begin with a specific statistic or data point
+2. Always cite sources with actual dates
+3. Focus on surprising findings or counterintuitive data
+4. Create immediate tension in the first sentence
+5. Make the hook relevant to the target industry`;
 }
 
 export function createUserPrompt(
@@ -29,38 +37,52 @@ export function createUserPrompt(
   recentNews: NewsArticle[],
   writingSample?: string
 ): string {
-  let prompt = `Generate ${numPosts} LinkedIn posts about "${topic}" with a "${tone}" tone, written from the "${pov}" point of view.
-These posts are for a professional in the ${industry} industry.
+  let prompt = `Generate ${numPosts} LinkedIn posts about "${topic}" that will STOP THE SCROLL.
+Write with a "${tone}" tone from a "${pov}" perspective for a ${industry} professional.
 
-CRITICAL REQUIREMENTS:
-1. Each post MUST begin with a specific fact, statistic, or data point from recent news
-2. Always cite your sources with publication dates and URLs
-3. Focus on tangible developments, NOT opinions or predictions
-4. Use concrete numbers and specific dates
-5. Highlight surprising or counter-intuitive findings`;
+HOOK REQUIREMENTS:
+1. Start each post with a PROVOCATIVE HOOK using specific numbers/data
+2. Create immediate intellectual tension in the first sentence
+3. Challenge common industry assumptions with data
+4. Use time-sensitive language to create urgency
+5. Connect the hook directly to ${industry} professionals' interests`;
 
   if (recentNews.length > 0) {
-    prompt += `\n\nHere are specific recent news items you MUST reference (use concrete facts and statistics from these):`;
+    prompt += `\n\nLEVERAGE THESE NEWS ITEMS (extract specific statistics and surprising facts):`;
     
     recentNews.forEach((article, index) => {
-      prompt += `\n${index + 1}. "${article.title}" from ${article.source} (${new Date(article.publishedDate).toDateString()})
+      prompt += `\n${index + 1}. "${article.title}" (${new Date(article.publishedDate).toDateString()})
       Key points: ${article.snippet || 'No snippet available'}
-      URL: ${article.url}`;
+      URL: ${article.url}
+      Extract the most surprising statistics or findings from this article.`;
     });
   }
 
   if (writingSample) {
-    prompt += `\n\nMatch this writing style after the hook:\n"${writingSample}"`;
+    prompt += `\n\nAFTER THE HOOK, match this writing style:\n"${writingSample}"`;
   }
 
-  prompt += `\n\nFormat your response as a JSON object with:
-  - "posts": an array of objects, each with:
-      - "content": the post text starting with a SPECIFIC fact or statistic
-      - "topic": the specific aspect of the main topic this post addresses
-      - "hook": the opening fact-based statement
-      - "facts": array of objects with "fact", "source", and "date"
-      - "hashtags": array of relevant hashtags
-      - "sources": array of objects with "title", "url", and "publication_date"`;
+  prompt += `\n\nFormat each post as a JSON object with:
+  {
+    "posts": [
+      {
+        "hook": "The attention-grabbing first sentence with specific data",
+        "content": "Full post starting with the hook",
+        "topic": "Specific aspect of the main topic",
+        "facts": [{"fact": "...", "source": "...", "date": "..."}],
+        "hashtags": ["relevant", "hashtags"],
+        "sources": [{"title": "...", "url": "...", "publication_date": "..."}]
+      }
+    ]
+  }`;
 
   return prompt;
+}
+
+export interface NewsArticle {
+  title: string;
+  url: string;
+  publishedDate: string;
+  snippet?: string;
+  source: string;
 }
