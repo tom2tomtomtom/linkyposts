@@ -1,7 +1,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
-import { extractArticleContent } from "./news.ts";
+import { extractArticleContent, findRelatedArticles } from "./news.ts";
 import { createDbClient, saveGeneratedContent, saveLinkedInPosts } from "./database.ts";
 import { generateAnalysis } from "./openai.ts";
 
@@ -28,27 +28,28 @@ serve(async (req) => {
 
     console.log("Received request with params:", { userId, topic, tone, pov, numPosts, includeNews });
 
-    let articleContent = "";
-    let articleTitle = "";
-    let articleUrl = "";
+    let mainArticle = null;
+    let relatedArticles = [];
 
     // Check if the topic is a URL
     const isUrl = topic.startsWith('http://') || topic.startsWith('https://');
     if (isUrl) {
       console.log("Topic is a URL, fetching article content...");
       try {
-        const article = await extractArticleContent(topic);
-        articleContent = article.content || "";
-        articleTitle = article.title || "";
-        articleUrl = topic;
-        console.log("Article extraction results:", {
-          hasContent: !!articleContent,
-          contentLength: articleContent.length,
-          title: articleTitle,
-          url: articleUrl
+        mainArticle = await extractArticleContent(topic);
+        console.log("Main article extracted:", {
+          title: mainArticle.title,
+          contentLength: mainArticle.content.length,
+          url: mainArticle.url
         });
+
+        if (includeNews) {
+          // Search for related articles based on the main article's title
+          relatedArticles = await findRelatedArticles(mainArticle.title);
+          console.log(`Found ${relatedArticles.length} related articles`);
+        }
       } catch (error) {
-        console.error("Error extracting article content:", error);
+        console.error("Error processing articles:", error);
       }
     }
 
@@ -70,13 +71,24 @@ serve(async (req) => {
 
     let prompt = `Generate ${numPosts} unique LinkedIn posts`;
 
-    if (articleContent) {
+    if (mainArticle) {
       // When we have article content, make it the primary focus
-      prompt += `\n\nBased primarily on this article:\nTitle: ${articleTitle}\nURL: ${articleUrl}\nContent: ${articleContent}\n\n`;
-      prompt += `Create engaging LinkedIn posts that discuss the key points and insights from this article. `;
-      prompt += `Add your professional perspective and make it relevant to the industry.`;
+      prompt += `\n\nMain Article Analysis:\nTitle: ${mainArticle.title}\nURL: ${mainArticle.url}\nContent: ${mainArticle.content}\n\n`;
+      
+      if (relatedArticles.length > 0) {
+        prompt += "\nRelated Articles for Context:\n";
+        relatedArticles.forEach((article, index) => {
+          prompt += `\nArticle ${index + 1}:\nTitle: ${article.title}\nURL: ${article.url}\nKey Points: ${article.content.slice(0, 500)}...\n`;
+        });
+      }
+      
+      prompt += `\nUsing the main article as your primary source and the related articles for additional context:
+1. Analyze the key points and insights
+2. Form a unique, well-researched opinion
+3. Connect ideas across the different sources
+4. Challenge conventional thinking with evidence
+5. Provide actionable takeaways for the readers`;
     } else {
-      // If no article, use the topic as before
       prompt += ` about ${topic}.`;
     }
 
@@ -86,8 +98,8 @@ serve(async (req) => {
     if (writingSample) prompt += `\nMatch this writing style: ${writingSample}`;
 
     console.log("Generating posts with configuration:", {
-      hasArticleContent: !!articleContent,
-      articleContentPreview: articleContent.slice(0, 200) + "...",
+      hasMainArticle: !!mainArticle,
+      numRelatedArticles: relatedArticles.length,
       tone: defaultTone,
       pov: defaultPov,
       industry: !!industry,
@@ -96,7 +108,6 @@ serve(async (req) => {
 
     const posts = await generateAnalysis(prompt);
 
-    // Check if we got valid posts back
     if (!posts || !Array.isArray(posts)) {
       throw new Error("Invalid response from OpenAI");
     }
@@ -108,7 +119,7 @@ serve(async (req) => {
     const generatedContentId = await saveGeneratedContent(
       supabase,
       userId,
-      isUrl ? articleTitle : topic,
+      isUrl ? mainArticle?.title || topic : topic,
       defaultTone,
       defaultPov,
       writingSample,
