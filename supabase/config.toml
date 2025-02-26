@@ -1,6 +1,4 @@
 
 project_id = "kwxaqyxwwmpytiawjgjm"
-
 [functions.generate-linkedin-post]
 verify_jwt = true
-

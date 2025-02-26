@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -86,7 +85,6 @@ export default function GeneratePost() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Starting post generation...");
 
     if (!user) {
       toast.error("You must be logged in to generate posts");
@@ -99,10 +97,6 @@ export default function GeneratePost() {
     }
 
     setIsGenerating(true);
-    console.log("Sending request to edge function with data:", {
-      userId: user.id,
-      ...formData,
-    });
 
     try {
       const { data, error } = await supabase.functions.invoke("generate-linkedin-post", {
@@ -118,31 +112,13 @@ export default function GeneratePost() {
         },
       });
 
-      console.log("Response from edge function:", { data, error });
-
-      if (error) {
-        console.error("Edge function error:", error);
-        throw error;
-      }
-      
-      if (!data?.success || !data?.posts) {
-        console.error("Invalid response format:", data);
-        throw new Error(data?.error || 'Failed to generate posts: Invalid response format');
-      }
+      if (error) throw error;
 
       toast.success("Posts generated successfully!");
       navigate("/posts");
     } catch (error: any) {
       console.error("Error generating posts:", error);
-      const errorMessage = error.message || "Failed to generate posts";
-      
-      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('Failed to send')) {
-        toast.error("Network error. Please try again in a few moments.");
-      } else if (errorMessage.includes('extract article')) {
-        toast.error("Could not extract article content. Please try a different URL or enter your topic directly.");
-      } else {
-        toast.error(errorMessage);
-      }
+      toast.error(error.message || "Failed to generate posts");
     } finally {
       setIsGenerating(false);
     }
