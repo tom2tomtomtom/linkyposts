@@ -1,20 +1,18 @@
 
-import OpenAI from "https://deno.land/x/openai@v4.24.0/mod.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
-import { corsHeaders } from "../_shared/cors.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "@supabase/supabase-js";
+import { generateContent } from "./openai.ts";
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: Deno.env.get('OPENAI_API_KEY') || '',
-});
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
-Deno.serve(async (req) => {
+serve(async (req) => {
   // Handle CORS preflight requests
-  if (req.method === "OPTIONS") {
-    return new Response(null, {
-      headers: corsHeaders,
-      status: 204,
-    });
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
@@ -40,6 +38,34 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Initialize Supabase client
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
+    const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
+    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+    
+    // Fetch relevant news if requested
+    let newsArticles = [];
+    if (includeNews) {
+      console.log("Fetching relevant news articles");
+      try {
+        const escapedTopic = topic.replace(/[%_]/g, '\\$&'); // Escape special characters for ILIKE
+        const { data: articles, error: newsError } = await supabase
+          .from('news_articles')
+          .select('*')
+          .or(`title.ilike.%${escapedTopic}%,content.ilike.%${escapedTopic}%`)
+          .eq('industry', industry)
+          .order('published_date', { ascending: false })
+          .limit(5);
+
+        if (newsError) throw newsError;
+        newsArticles = articles || [];
+        console.log(`Found ${newsArticles.length} relevant news articles`);
+      } catch (error) {
+        console.error("Error fetching news:", error);
+        // Continue without news articles if there's an error
+      }
+    }
+
     // Create the system prompt
     const systemPrompt = `You are a professional LinkedIn content creator who specializes in creating engaging, informative posts. 
     Write ${numPosts} unique LinkedIn posts about ${topic} with a ${tone} tone using ${pov} point of view.
@@ -51,70 +77,65 @@ Deno.serve(async (req) => {
     - Be formatted with clear paragraphs
     - Match the writing style from the sample if provided`;
 
-    console.log("Generating content with OpenAI");
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4-turbo-preview",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: `Write ${numPosts} LinkedIn posts about ${topic}. Industry: ${industry}. Writing sample for style matching: ${writingSample || 'N/A'}` }
-      ],
-      temperature: 0.7,
-    });
-
-    console.log("OpenAI response received");
-
-    if (!completion.choices[0]?.message?.content) {
-      console.error("No content generated from OpenAI");
-      throw new Error("Failed to generate content");
+    // Create the user prompt including news articles if available
+    let userPrompt = `Write ${numPosts} LinkedIn posts about ${topic}. Industry: ${industry}.`;
+    if (writingSample) {
+      userPrompt += `\n\nMatch this writing style: "${writingSample}"`;
+    }
+    if (newsArticles.length > 0) {
+      userPrompt += "\n\nIncorporate insights from these recent news articles:";
+      newsArticles.forEach((article, index) => {
+        userPrompt += `\n${index + 1}. "${article.title}" - ${article.snippet || ''}`;
+      });
     }
 
-    const content = completion.choices[0].message.content;
+    console.log("Generating content with OpenAI");
+    const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
+    if (!openAIApiKey) {
+      throw new Error('OpenAI API key is not configured');
+    }
+
+    const content = await generateContent(openAIApiKey, systemPrompt, userPrompt);
     console.log("Content generated successfully");
 
-    // Split the content into individual posts
-    const posts = content.split(/Post \d+:/).filter(Boolean);
-    console.log(`Split response into ${posts.length} posts`);
-
-    // Initialize Supabase client
-    const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
-    const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-    const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
-    console.log("Supabase client initialized");
-
-    // Save each post
+    // Save posts to the database
     const savedPosts = [];
-    for (const postContent of posts) {
+    for (const post of content.posts) {
       try {
-        // Extract hashtags from content
-        const hashtagRegex = /#[\w]+/g;
-        const hashtags = postContent.match(hashtagRegex) || [];
-        
-        // Clean up the content
-        const cleanContent = postContent.trim();
-
-        console.log("Saving post to database");
         const { data, error } = await supabase
           .from('linkedin_posts')
           .insert({
             user_id: userId,
-            content: cleanContent,
-            topic,
-            hashtags,
+            content: post.content,
+            topic: post.topic,
+            hashtags: post.hashtags,
             version_group: crypto.randomUUID(),
             is_current_version: true,
           })
           .select()
           .single();
 
-        if (error) {
-          console.error("Error saving post:", error);
-          throw error;
-        }
-
+        if (error) throw error;
         savedPosts.push(data);
-        console.log("Post saved successfully");
+
+        // Save post sources if available
+        if (post.sources && post.sources.length > 0) {
+          const { error: sourcesError } = await supabase
+            .from('post_sources')
+            .insert(
+              post.sources.map(source => ({
+                linkedin_post_id: data.id,
+                title: source.title,
+                url: source.url,
+                publication_date: source.publication_date
+              }))
+            );
+          if (sourcesError) {
+            console.error("Error saving sources:", sourcesError);
+          }
+        }
       } catch (error) {
-        console.error("Error processing post:", error);
+        console.error("Error saving post:", error);
         throw error;
       }
     }
@@ -150,4 +171,3 @@ Deno.serve(async (req) => {
     );
   }
 });
-

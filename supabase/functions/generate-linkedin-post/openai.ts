@@ -6,12 +6,14 @@ export async function generateContent(
   systemPrompt: string,
   userPrompt: string
 ): Promise<AIResponse> {
+  console.log('Generating content with OpenAI');
+  
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
-    headers: {
+    headers: new Headers({
       'Authorization': `Bearer ${openAIApiKey}`,
-      'Content-Type': 'application/json',
-    },
+      'Content-Type': 'application/json'
+    }),
     body: JSON.stringify({
       model: 'gpt-4o',
       messages: [
@@ -22,6 +24,11 @@ export async function generateContent(
       response_format: { type: "json_object" }
     }),
   });
+
+  if (!response.ok) {
+    console.error('OpenAI API error:', response.status, await response.text());
+    throw new Error(`OpenAI API error: ${response.status}`);
+  }
 
   const completion = await response.json();
   return JSON.parse(completion.choices[0]?.message?.content || '{"posts":[], "styleAnalysis":{}}');
