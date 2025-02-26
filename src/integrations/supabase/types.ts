@@ -9,7 +9,242 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      generated_content: {
+        Row: {
+          created_at: string | null
+          id: string
+          pov: string | null
+          status: Database["public"]["Enums"]["content_status"] | null
+          style_analysis: Json | null
+          tone: string | null
+          topic: string
+          updated_at: string | null
+          user_id: string
+          writing_sample: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          pov?: string | null
+          status?: Database["public"]["Enums"]["content_status"] | null
+          style_analysis?: Json | null
+          tone?: string | null
+          topic: string
+          updated_at?: string | null
+          user_id: string
+          writing_sample?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          pov?: string | null
+          status?: Database["public"]["Enums"]["content_status"] | null
+          style_analysis?: Json | null
+          tone?: string | null
+          topic?: string
+          updated_at?: string | null
+          user_id?: string
+          writing_sample?: string | null
+        }
+        Relationships: []
+      }
+      linkedin_posts: {
+        Row: {
+          content: string
+          created_at: string | null
+          generated_content_id: string | null
+          hashtags: string[] | null
+          id: string
+          is_current_version: boolean | null
+          published_at: string | null
+          scheduled_for: string | null
+          topic: string | null
+          updated_at: string | null
+          user_id: string
+          version_group: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          generated_content_id?: string | null
+          hashtags?: string[] | null
+          id?: string
+          is_current_version?: boolean | null
+          published_at?: string | null
+          scheduled_for?: string | null
+          topic?: string | null
+          updated_at?: string | null
+          user_id: string
+          version_group?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          generated_content_id?: string | null
+          hashtags?: string[] | null
+          id?: string
+          is_current_version?: boolean | null
+          published_at?: string | null
+          scheduled_for?: string | null
+          topic?: string | null
+          updated_at?: string | null
+          user_id?: string
+          version_group?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "linkedin_posts_generated_content_id_fkey"
+            columns: ["generated_content_id"]
+            isOneToOne: false
+            referencedRelation: "generated_content"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      post_analytics: {
+        Row: {
+          clicks: number | null
+          comments: number | null
+          id: string
+          impressions: number | null
+          last_updated: string | null
+          likes: number | null
+          linkedin_post_id: string
+          shares: number | null
+        }
+        Insert: {
+          clicks?: number | null
+          comments?: number | null
+          id?: string
+          impressions?: number | null
+          last_updated?: string | null
+          likes?: number | null
+          linkedin_post_id: string
+          shares?: number | null
+        }
+        Update: {
+          clicks?: number | null
+          comments?: number | null
+          id?: string
+          impressions?: number | null
+          last_updated?: string | null
+          likes?: number | null
+          linkedin_post_id?: string
+          shares?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_analytics_linkedin_post_id_fkey"
+            columns: ["linkedin_post_id"]
+            isOneToOne: false
+            referencedRelation: "linkedin_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      post_schedules: {
+        Row: {
+          created_at: string | null
+          id: string
+          linkedin_post_id: string
+          scheduled_time: string
+          status: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          linkedin_post_id: string
+          scheduled_time: string
+          status?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          linkedin_post_id?: string
+          scheduled_time?: string
+          status?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_schedules_linkedin_post_id_fkey"
+            columns: ["linkedin_post_id"]
+            isOneToOne: false
+            referencedRelation: "linkedin_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      post_sources: {
+        Row: {
+          created_at: string | null
+          id: string
+          linkedin_post_id: string
+          publication_date: string | null
+          title: string
+          url: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          linkedin_post_id: string
+          publication_date?: string | null
+          title: string
+          url?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          linkedin_post_id?: string
+          publication_date?: string | null
+          title?: string
+          url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_sources_linkedin_post_id_fkey"
+            columns: ["linkedin_post_id"]
+            isOneToOne: false
+            referencedRelation: "linkedin_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_preferences: {
+        Row: {
+          created_at: string | null
+          default_pov: string | null
+          default_tone: string | null
+          industry: string | null
+          updated_at: string | null
+          user_id: string
+          writing_sample: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          default_pov?: string | null
+          default_tone?: string | null
+          industry?: string | null
+          updated_at?: string | null
+          user_id: string
+          writing_sample?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          default_pov?: string | null
+          default_tone?: string | null
+          industry?: string | null
+          updated_at?: string | null
+          user_id?: string
+          writing_sample?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -18,7 +253,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      content_status: "draft" | "scheduled" | "published" | "archived"
     }
     CompositeTypes: {
       [_ in never]: never
