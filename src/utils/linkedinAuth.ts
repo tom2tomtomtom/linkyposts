@@ -2,7 +2,8 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export async function connectLinkedIn() {
-  const redirectUrl = `${window.location.origin}/auth/callback`;
+  // Use the production URL for LinkedIn OAuth
+  const redirectUrl = 'https://linkyposts.lovable.app/auth/callback';
   console.log('Initiating LinkedIn OAuth with redirect URL:', redirectUrl);
   
   const { data, error } = await supabase.auth.signInWithOAuth({
@@ -37,4 +38,3 @@ export async function publishToLinkedIn(postContent: string, userId: string) {
     throw error;
   }
 }
-
