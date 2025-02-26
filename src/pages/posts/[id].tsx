@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -30,6 +31,11 @@ type Post = {
   published_at: string | null;
   scheduled_for: string | null;
   sources?: Source[];
+};
+
+// Function to clean markdown-style formatting
+const cleanMarkdownContent = (content: string) => {
+  return content.replace(/\*\*(.*?)\*\*/g, '$1');
 };
 
 export default function PostDetail() {
@@ -385,7 +391,9 @@ export default function PostDetail() {
                     )}
                     <div>
                       <Label className="text-muted-foreground">Content</Label>
-                      <p className="whitespace-pre-wrap">{post.content}</p>
+                      <p className="whitespace-pre-wrap font-medium">
+                        {cleanMarkdownContent(post.content)}
+                      </p>
                     </div>
                     {post.sources && post.sources.length > 0 && (
                       <div>
