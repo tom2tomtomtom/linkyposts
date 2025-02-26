@@ -11,7 +11,11 @@ export default function Callback() {
     const handleAuthCallback = async () => {
       try {
         // Log the full URL for debugging
-        console.log('Callback URL:', window.location.href);
+        console.log('Auth callback triggered', {
+          fullUrl: window.location.href,
+          search: window.location.search,
+          hash: window.location.hash
+        });
         
         // Get error from URL if present
         const params = new URLSearchParams(window.location.search);
@@ -27,7 +31,9 @@ export default function Callback() {
         console.log('Auth callback session check:', { 
           hasSession: !!session, 
           error,
-          userId: session?.user?.id 
+          userId: session?.user?.id,
+          accessToken: !!session?.access_token,
+          provider: session?.user?.app_metadata?.provider
         });
         
         if (error) {

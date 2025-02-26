@@ -2,13 +2,16 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export async function connectLinkedIn() {
-  console.log('Initiating LinkedIn OAuth...');
+  console.log('Initiating LinkedIn OAuth...', {
+    origin: window.location.origin,
+    redirectUrl: `${window.location.origin}/auth/callback`
+  });
   
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'linkedin_oidc',
     options: {
-      scopes: 'openid profile email',
       redirectTo: `${window.location.origin}/auth/callback`,
+      scopes: 'openid profile email',
       queryParams: {
         prompt: 'consent',
         access_type: 'offline'
@@ -21,6 +24,7 @@ export async function connectLinkedIn() {
     throw error;
   }
 
+  console.log('LinkedIn OAuth response:', data);
   return data;
 }
 
