@@ -2,15 +2,13 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export async function connectLinkedIn() {
-  // Use the production URL for LinkedIn OAuth
-  const redirectUrl = 'https://linkyposts.lovable.app/auth/callback';
-  console.log('Initiating LinkedIn OAuth with redirect URL:', redirectUrl);
+  // Let Supabase handle the callback URL internally
+  console.log('Initiating LinkedIn OAuth...');
   
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: 'linkedin_oidc',
     options: {
       scopes: 'openid profile email',
-      redirectTo: redirectUrl,
       queryParams: {
         prompt: 'consent'
       }
