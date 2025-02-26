@@ -63,11 +63,7 @@ export default function Posts() {
       
       console.log("Fetched posts:", data);
       return data as Post[];
-    },
-    enabled: !!user,
-    gcTime: 0, // Don't cache the data in garbage collection
-    refetchOnMount: true, // Refetch when component mounts
-    refetchOnWindowFocus: true, // Refetch when window gains focus
+    }
   });
 
   const handleCopyToClipboard = async (content: string) => {
