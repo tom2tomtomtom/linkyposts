@@ -1,4 +1,3 @@
-
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -12,6 +11,25 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+interface Source {
+  title: string;
+  url: string;
+  publication_date: string;
+}
+
+interface GeneratedPost {
+  content: string;
+  topic: string;
+  hook: string;
+  facts: Array<{
+    fact: string;
+    source: string;
+    date: string;
+  }>;
+  hashtags: string[];
+  sources: Source[];
+}
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -60,30 +78,50 @@ serve(async (req) => {
     const userPrompt = createUserPrompt(topic, tone, pov, industry, numPosts, recentNews, writingSample);
 
     // Generate content using OpenAI
-    const aiResponse = await generateContent(openAIApiKey, systemPrompt, userPrompt);
+    const response = await generateContent(userPrompt);
+    const { posts, styleAnalysis } = response;
 
-    // Save generated content to database
-    const generatedContentId = await saveGeneratedContent(
-      supabase,
-      userId,
-      topic,
-      tone,
-      pov,
-      writingSample,
-      aiResponse
-    );
+    // Save each post with its sources
+    const savedPosts = await Promise.all(posts.map(async (post: GeneratedPost) => {
+      // Insert the post
+      const { data: savedPost, error: postError } = await supabase
+        .from('linkedin_posts')
+        .insert({
+          user_id: userId,
+          content: post.content,
+          topic: post.topic,
+          hashtags: post.hashtags,
+          version_group: generateUUID(),
+          is_current_version: true,
+        })
+        .select()
+        .single();
 
-    // Save LinkedIn posts
-    await saveLinkedInPosts(supabase, userId, generatedContentId, aiResponse.posts);
+      if (postError) throw postError;
+
+      // Insert the sources
+      if (post.sources && post.sources.length > 0) {
+        const { error: sourcesError } = await supabase
+          .from('post_sources')
+          .insert(
+            post.sources.map(source => ({
+              linkedin_post_id: savedPost.id,
+              title: source.title,
+              url: source.url,
+              publication_date: source.publication_date,
+            }))
+          );
+
+        if (sourcesError) throw sourcesError;
+      }
+
+      return savedPost;
+    }));
 
     // Return the successful response
     return new Response(
-      JSON.stringify({
-        posts: aiResponse.posts,
-        styleAnalysis: aiResponse.styleAnalysis,
-        generatedContentId
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ success: true, posts: savedPosts }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {

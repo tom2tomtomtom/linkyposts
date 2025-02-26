@@ -8,9 +8,16 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Copy, Save, Trash2, CalendarClock, Share2 } from "lucide-react";
+import { Copy, Save, Trash2, CalendarClock, Share2, Link } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+
+type Source = {
+  id: string;
+  title: string;
+  url: string;
+  publication_date: string;
+};
 
 type Post = {
   id: string;
@@ -21,6 +28,7 @@ type Post = {
   updated_at: string;
   published_at: string | null;
   scheduled_for: string | null;
+  sources?: Source[];
 };
 
 export default function PostDetail() {
@@ -41,7 +49,10 @@ export default function PostDetail() {
 
       const { data, error } = await supabase
         .from("linkedin_posts")
-        .select("*")
+        .select(`
+          *,
+          sources:post_sources(id, title, url, publication_date)
+        `)
         .eq("id", id)
         .eq("user_id", user.id)
         .eq("is_current_version", true)
@@ -272,6 +283,28 @@ export default function PostDetail() {
                       <Label className="text-muted-foreground">Content</Label>
                       <p className="whitespace-pre-wrap">{post.content}</p>
                     </div>
+                    {post.sources && post.sources.length > 0 && (
+                      <div>
+                        <Label className="text-muted-foreground">Sources</Label>
+                        <div className="space-y-2 mt-2">
+                          {post.sources.map((source) => (
+                            <a
+                              key={source.id}
+                              href={source.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 text-blue-600 hover:underline"
+                            >
+                              <Link className="w-4 h-4" />
+                              <span>{source.title}</span>
+                              <span className="text-sm text-muted-foreground">
+                                ({new Date(source.publication_date).toLocaleDateString()})
+                              </span>
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     {post.hashtags && post.hashtags.length > 0 && (
                       <div>
                         <Label className="text-muted-foreground">Hashtags</Label>
