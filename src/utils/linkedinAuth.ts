@@ -8,6 +8,7 @@ export async function connectLinkedIn() {
     provider: 'linkedin_oidc',
     options: {
       scopes: 'openid profile email',
+      redirectTo: `${window.location.origin}/auth/callback`,
       queryParams: {
         prompt: 'consent',
         access_type: 'offline'
