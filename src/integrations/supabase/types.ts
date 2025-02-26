@@ -101,6 +101,42 @@ export type Database = {
           },
         ]
       }
+      news_articles: {
+        Row: {
+          content: string | null
+          created_at: string | null
+          id: string
+          industry: string
+          published_date: string
+          snippet: string | null
+          source: string
+          title: string
+          url: string
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string | null
+          id?: string
+          industry: string
+          published_date: string
+          snippet?: string | null
+          source: string
+          title: string
+          url: string
+        }
+        Update: {
+          content?: string | null
+          created_at?: string | null
+          id?: string
+          industry?: string
+          published_date?: string
+          snippet?: string | null
+          source?: string
+          title?: string
+          url?: string
+        }
+        Relationships: []
+      }
       post_analytics: {
         Row: {
           clicks: number | null
@@ -214,6 +250,27 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      tracked_industries: {
+        Row: {
+          active: boolean | null
+          created_at: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          active?: boolean | null
+          created_at?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          active?: boolean | null
+          created_at?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
       }
       user_preferences: {
         Row: {
