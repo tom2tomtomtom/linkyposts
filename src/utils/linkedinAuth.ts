@@ -16,7 +16,7 @@ export async function connectLinkedIn() {
         prompt: 'consent',
         access_type: 'offline'
       },
-      skipBrowserRedirect: true // This prevents automatic redirect
+      skipBrowserRedirect: true
     }
   });
 
@@ -26,7 +26,6 @@ export async function connectLinkedIn() {
   }
 
   if (data?.url) {
-    // Open the authorization URL in a popup window
     const width = 600;
     const height = 600;
     const left = window.innerWidth / 2 - width / 2;
@@ -43,8 +42,48 @@ export async function connectLinkedIn() {
   return data;
 }
 
+export async function refreshLinkedInToken(userId: string) {
+  try {
+    const { data: { session }, error: refreshError } = await supabase.auth.refreshSession();
+    
+    if (refreshError) throw refreshError;
+    if (!session) throw new Error('No session found after refresh');
+
+    // After successful refresh, update the token in our database
+    const { error: updateError } = await supabase
+      .from('linkedin_auth_tokens')
+      .update({ 
+        access_token: session.provider_token,
+        expires_at: new Date(Date.now() + (session.expires_in || 3600) * 1000).toISOString()
+      })
+      .eq('user_id', userId);
+
+    if (updateError) throw updateError;
+    
+    return session.provider_token;
+  } catch (error) {
+    console.error('Error refreshing LinkedIn token:', error);
+    throw error;
+  }
+}
+
 export async function publishToLinkedIn(postContent: string, userId: string) {
   try {
+    const { data: tokenData, error: tokenError } = await supabase
+      .from('linkedin_auth_tokens')
+      .select('access_token, expires_at')
+      .eq('user_id', userId)
+      .single();
+
+    if (tokenError) throw tokenError;
+
+    // Check if token exists and is expired
+    if (!tokenData?.access_token || (tokenData.expires_at && new Date(tokenData.expires_at) <= new Date())) {
+      // Try to refresh the token
+      await refreshLinkedInToken(userId);
+    }
+
+    // Now make the actual publish request
     const { data, error } = await supabase.functions.invoke('publish-to-linkedin', {
       body: { content: postContent, userId }
     });
