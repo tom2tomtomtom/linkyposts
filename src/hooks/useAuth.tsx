@@ -13,7 +13,6 @@ type AuthContextType = {
   signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
-  signInWithLinkedIn: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -121,25 +120,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const signInWithLinkedIn = async () => {
-    setIsLoading(true);
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'linkedin_oidc',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-      
-      if (error) throw error;
-    } catch (error: any) {
-      toast.error(error.message);
-      throw error;
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   return (
     <AuthContext.Provider value={{
       user,
@@ -149,7 +129,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signUp,
       signOut,
       signInWithGoogle,
-      signInWithLinkedIn,
     }}>
       {children}
     </AuthContext.Provider>
