@@ -201,7 +201,7 @@ export default function Posts() {
                     </div>
                   </div>
                 </Card>
-              )
+              );
             })}
           </div>
         )}
