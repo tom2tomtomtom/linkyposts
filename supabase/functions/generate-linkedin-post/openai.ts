@@ -1,93 +1,28 @@
 
-import { Configuration, OpenAIApi } from "https://esm.sh/openai@4.11.1";
-import { generatePrompt } from "./prompts.ts";
+import { AIResponse } from './types.ts';
 
-const openaiConfig = new Configuration({
-  apiKey: Deno.env.get('OPENAI_API_KEY'),
-});
-
-const openai = new OpenAIApi(openaiConfig);
-
-interface GeneratePostsParams {
-  topic: string;
-  tone?: string;
-  pov?: string;
-  writingSample?: string;
-  industry?: string;
-  numPosts?: number;
-  additionalContext?: string;
-  newsArticles?: any[];
-}
-
-export async function generatePosts(params: GeneratePostsParams) {
-  const {
-    topic,
-    tone = "professional",
-    pov = "first person",
-    writingSample = "",
-    industry = "",
-    numPosts = 3,
-    additionalContext = "",
-    newsArticles = [],
-  } = params;
-
-  console.log("Generating posts with params:", {
-    topic,
-    tone,
-    pov,
-    industry,
-    numPosts,
-    hasWritingSample: !!writingSample,
-    hasAdditionalContext: !!additionalContext,
-    newsArticlesCount: newsArticles.length,
-  });
-
-  try {
-    const prompt = generatePrompt({
-      topic,
-      tone,
-      pov,
-      writingSample,
-      industry,
-      additionalContext,
-      newsArticles,
-    });
-
-    const completion = await openai.createChatCompletion({
-      model: "gpt-4o-mini",
+export async function generateContent(
+  openAIApiKey: string,
+  systemPrompt: string,
+  userPrompt: string
+): Promise<AIResponse> {
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${openAIApiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o',
       messages: [
-        {
-          role: "system",
-          content:
-            "You are a professional LinkedIn content writer that creates engaging posts.",
-        },
-        { role: "user", content: prompt },
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
       ],
       temperature: 0.7,
-      max_tokens: 2000,
-    });
+      response_format: { type: "json_object" }
+    }),
+  });
 
-    const content = completion.data.choices[0]?.message?.content;
-    if (!content) throw new Error("No content generated");
-
-    // Parse the generated content into separate posts
-    const posts = content
-      .split("===POST===")
-      .filter(Boolean)
-      .map((post) => {
-        const [rawContent, rawHashtags] = post.split("===HASHTAGS===");
-        return {
-          content: rawContent.trim(),
-          hashtags: (rawHashtags?.trim() ?? "")
-            .split(",")
-            .map((tag) => tag.trim())
-            .filter(Boolean),
-        };
-      });
-
-    return posts.slice(0, numPosts);
-  } catch (error) {
-    console.error("Error in generatePosts:", error);
-    throw error;
-  }
+  const completion = await response.json();
+  return JSON.parse(completion.choices[0]?.message?.content || '{"posts":[], "styleAnalysis":{}}');
 }

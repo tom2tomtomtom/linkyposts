@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -16,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Loader2, Link as LinkIcon } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 
 interface FormData {
@@ -37,15 +38,6 @@ const initialFormData: FormData = {
   industry: "",
   numPosts: 3,
   includeNews: true,
-};
-
-const isValidUrl = (string: string) => {
-  try {
-    new URL(string);
-    return true;
-  } catch (_) {
-    return false;
-  }
 };
 
 export default function GeneratePost() {
@@ -144,8 +136,6 @@ export default function GeneratePost() {
     );
   }
 
-  const isUrlInput = isValidUrl(formData.topic);
-
   return (
     <div className="min-h-screen bg-secondary p-6">
       <div className="max-w-7xl mx-auto">
@@ -154,26 +144,15 @@ export default function GeneratePost() {
           <form onSubmit={handleSubmit} className="space-y-6">
             <div>
               <Label htmlFor="topic">
-                Topic or Article URL <span className="text-destructive">*</span>
+                Topic <span className="text-destructive">*</span>
               </Label>
-              <div className="relative">
-                <Input
-                  id="topic"
-                  value={formData.topic}
-                  onChange={(e) => setFormData({ ...formData, topic: e.target.value })}
-                  placeholder="Enter a topic or paste a news article URL"
-                  required
-                  className={isUrlInput ? "pl-9" : ""}
-                />
-                {isUrlInput && (
-                  <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                )}
-              </div>
-              <p className="mt-2 text-sm text-muted-foreground">
-                {isUrlInput
-                  ? "We'll use this article as context for generating your posts"
-                  : "Enter a topic or paste a URL to use an article as context"}
-              </p>
+              <Input
+                id="topic"
+                value={formData.topic}
+                onChange={(e) => setFormData({ ...formData, topic: e.target.value })}
+                placeholder="e.g. Artificial Intelligence in Marketing, Remote Work Trends"
+                required
+              />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
