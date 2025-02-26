@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Copy, Save, Trash2, CalendarClock, Share2, Link } from "lucide-react";
+import { Copy, Save, Trash2, CalendarClock, Share2, Link, Calendar } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -41,6 +41,7 @@ export default function PostDetail() {
   const [topic, setTopic] = useState("");
   const [hashtags, setHashtags] = useState("");
   const [isEditing, setIsEditing] = useState(false);
+  const [scheduledFor, setScheduledFor] = useState("");
 
   const { data: post, isLoading } = useQuery({
     queryKey: ["post", id],
@@ -64,6 +65,26 @@ export default function PostDetail() {
     enabled: !!user && !!id
   });
 
+  // Also fetch any existing schedule
+  const { data: schedule } = useQuery({
+    queryKey: ["schedule", id],
+    queryFn: async () => {
+      if (!user || !id) throw new Error("Missing required data");
+
+      const { data, error } = await supabase
+        .from("post_schedules")
+        .select("*")
+        .eq("linkedin_post_id", id)
+        .eq("user_id", user.id)
+        .eq("status", "pending")
+        .single();
+
+      if (error && error.code !== "PGRST116") throw error; // PGRST116 is "not found"
+      return data;
+    },
+    enabled: !!user && !!id
+  });
+
   // Update form state when post data changes or edit mode is enabled
   useEffect(() => {
     if (post) {
@@ -72,6 +93,16 @@ export default function PostDetail() {
       setHashtags(post.hashtags?.join(" ") || "");
     }
   }, [post, isEditing]);
+
+  // Set scheduled time from existing schedule
+  useEffect(() => {
+    if (schedule) {
+      const scheduledDate = new Date(schedule.scheduled_time);
+      // Format date to YYYY-MM-DDThh:mm
+      const formattedDate = scheduledDate.toISOString().slice(0, 16);
+      setScheduledFor(formattedDate);
+    }
+  }, [schedule]);
 
   const updateMutation = useMutation({
     mutationFn: async (updatedPost: Partial<Post>) => {
@@ -93,6 +124,51 @@ export default function PostDetail() {
     onError: (error) => {
       toast.error("Failed to update post");
       console.error("Update error:", error);
+    },
+  });
+
+  const scheduleMutation = useMutation({
+    mutationFn: async () => {
+      if (!user || !id || !scheduledFor) throw new Error("Missing required data");
+
+      // First, delete any existing schedules
+      const { error: deleteError } = await supabase
+        .from("post_schedules")
+        .delete()
+        .eq("linkedin_post_id", id)
+        .eq("user_id", user.id);
+
+      if (deleteError) throw deleteError;
+
+      // Then create the new schedule
+      const { error: insertError } = await supabase
+        .from("post_schedules")
+        .insert({
+          linkedin_post_id: id,
+          user_id: user.id,
+          scheduled_time: new Date(scheduledFor).toISOString(),
+          status: "pending"
+        });
+
+      if (insertError) throw insertError;
+
+      // Update the post's scheduled_for date
+      const { error: updateError } = await supabase
+        .from("linkedin_posts")
+        .update({ scheduled_for: new Date(scheduledFor).toISOString() })
+        .eq("id", id)
+        .eq("user_id", user.id);
+
+      if (updateError) throw updateError;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["schedule", id] });
+      queryClient.invalidateQueries({ queryKey: ["post", id] });
+      toast.success("Post scheduled successfully");
+    },
+    onError: (error) => {
+      toast.error("Failed to schedule post");
+      console.error("Schedule error:", error);
     },
   });
 
@@ -129,6 +205,21 @@ export default function PostDetail() {
       topic: topic || null,
       hashtags: parsedHashtags,
     });
+  };
+
+  const handleSchedule = () => {
+    if (!scheduledFor) {
+      toast.error("Please select a date and time for scheduling");
+      return;
+    }
+
+    const scheduledDate = new Date(scheduledFor);
+    if (scheduledDate <= new Date()) {
+      toast.error("Scheduled time must be in the future");
+      return;
+    }
+
+    scheduleMutation.mutate();
   };
 
   const handleCopyToClipboard = async () => {
@@ -239,6 +330,25 @@ export default function PostDetail() {
                   </span>
                 )}
               </div>
+
+              {!post.published_at && (
+                <div className="mb-6">
+                  <Label htmlFor="scheduledFor">Schedule Post</Label>
+                  <div className="flex gap-2 mt-1">
+                    <Input
+                      id="scheduledFor"
+                      type="datetime-local"
+                      value={scheduledFor}
+                      onChange={(e) => setScheduledFor(e.target.value)}
+                      min={new Date().toISOString().slice(0, 16)}
+                    />
+                    <Button onClick={handleSchedule} disabled={!scheduledFor}>
+                      <Calendar className="w-4 h-4 mr-2" />
+                      {schedule ? "Update Schedule" : "Schedule"}
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-4">
                 {isEditing ? (
