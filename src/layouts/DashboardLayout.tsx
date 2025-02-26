@@ -1,6 +1,6 @@
 
-import { Outlet } from 'react-router-dom'
-import { Header } from '@/components/dashboard/Header'
+import { Outlet } from 'react-router-dom';
+import { Header } from '@/components/dashboard/Header';
 
 export default function DashboardLayout() {
   return (
@@ -10,5 +10,5 @@ export default function DashboardLayout() {
         <Outlet />
       </main>
     </div>
-  )
+  );
 }

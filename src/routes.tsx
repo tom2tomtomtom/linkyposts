@@ -6,6 +6,7 @@ import NotFound from "@/pages/NotFound";
 import LoginPage from "@/pages/auth/LoginPage";
 import SignupPage from "@/pages/auth/SignupPage";
 import Callback from "@/pages/auth/Callback";
+import DashboardLayout from "@/layouts/DashboardLayout";
 import Dashboard from "@/pages/dashboard";
 import Posts from "@/pages/posts";
 import GeneratePost from "@/pages/posts/generate";
@@ -85,24 +86,29 @@ export const router = createBrowserRouter([
         element: <ProtectedRoute />,
         children: [
           {
-            path: "dashboard",
-            element: <Dashboard />
-          },
-          {
-            path: "posts",
-            element: <Posts />
-          },
-          {
-            path: "posts/generate",
-            element: <GeneratePost />
-          },
-          {
-            path: "posts/:id",
-            element: <PostDetail />
-          },
-          {
-            path: "settings",
-            element: <Settings />
+            element: <DashboardLayout />,
+            children: [
+              {
+                path: "dashboard",
+                element: <Dashboard />
+              },
+              {
+                path: "posts",
+                element: <Posts />
+              },
+              {
+                path: "posts/generate",
+                element: <GeneratePost />
+              },
+              {
+                path: "posts/:id",
+                element: <PostDetail />
+              },
+              {
+                path: "settings",
+                element: <Settings />
+              }
+            ]
           }
         ]
       }
