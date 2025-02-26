@@ -43,6 +43,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
         try {
+          console.log('Auth state change:', { event: _event, hasSession: !!session });
           setSession(session);
           setUser(session?.user ?? null);
           setIsLoading(false);
@@ -116,6 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signInWithGoogle = async () => {
+    console.log('Initiating Google sign in...');
     try {
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
@@ -124,7 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             access_type: 'offline',
             prompt: 'consent',
           },
-          redirectTo: window.location.origin + '/auth/callback'
+          redirectTo: `${window.location.origin}/auth/callback`
         }
       });
       
@@ -133,6 +135,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         toast.error('Failed to sign in with Google');
         throw error;
       }
+      
+      console.log('Google sign in initiated successfully');
     } catch (error: any) {
       console.error('Google sign in error:', error);
       toast.error(error.message || 'Failed to sign in with Google');
@@ -172,3 +176,4 @@ export function useAuth() {
   }
   return context;
 }
+
