@@ -20,31 +20,29 @@ const stabilityApiKey = Deno.env.get('STABILITY_API_KEY');
 
 async function generateImagePrompt(content: string, topic: string | null): Promise<string> {
   try {
-    const prompt = `Create a detailed image generation prompt for a LinkedIn post about: ${topic || 'professional content'}. 
-    The post content is: ${content?.substring(0, 200)}...
-    Make the prompt professional, modern, and visually appealing. Keep it under 400 characters.`;
+    const prompt = `Create a simple, professional LinkedIn post image prompt about: ${topic || 'professional content'}. The post content is: ${content?.substring(0, 100)}... Keep it under 200 characters and focus on business-appropriate imagery.`;
 
     const completion = await openai.chat.completions.create({
       model: 'gpt-3.5-turbo',
       messages: [
         {
           role: 'system',
-          content: 'You are an expert at creating image generation prompts that work well with Stable Diffusion. Create clear, descriptive prompts that will result in professional, business-appropriate images.'
+          content: 'Create simple, clear image prompts for professional LinkedIn posts. Focus on business-appropriate imagery.'
         },
         { role: 'user', content: prompt }
       ],
-      max_tokens: 200,
-      temperature: 0.7,
+      max_tokens: 100,
+      temperature: 0.5,
     });
 
     const imagePrompt = completion.choices[0]?.message?.content?.trim() || 
-      `Professional business visualization related to ${topic || 'business and technology'}`;
+      `Professional business visualization: ${topic || 'business meeting'}`;
     
     console.log('Generated image prompt:', imagePrompt);
     return imagePrompt;
   } catch (error) {
     console.error('Error generating image prompt:', error);
-    return `Professional business scene related to ${topic || 'business and technology'}`;
+    return `Professional scene: ${topic || 'business meeting'}`;
   }
 }
 
@@ -77,6 +75,7 @@ Deno.serve(async (req) => {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${stabilityApiKey}`,
+        'Accept': 'application/json',
       },
       body: JSON.stringify({
         text_prompts: [{ 
@@ -88,7 +87,7 @@ Deno.serve(async (req) => {
         width: 1024,
         samples: 1,
         steps: 30,
-        style_preset: "digital-art"
+        style_preset: "photographic"
       }),
     });
 
