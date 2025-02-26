@@ -15,7 +15,8 @@ export async function connectLinkedIn() {
       queryParams: {
         prompt: 'consent',
         access_type: 'offline'
-      }
+      },
+      skipBrowserRedirect: true // This prevents automatic redirect
     }
   });
 
@@ -24,6 +25,20 @@ export async function connectLinkedIn() {
     throw error;
   }
 
+  if (data?.url) {
+    // Open the authorization URL in a popup window
+    const width = 600;
+    const height = 600;
+    const left = window.innerWidth / 2 - width / 2;
+    const top = window.innerHeight / 2 - height / 2;
+    
+    window.open(
+      data.url,
+      'LinkedIn Login',
+      `width=${width},height=${height},top=${top},left=${left},scrollbars=yes`
+    );
+  }
+  
   console.log('LinkedIn OAuth response:', data);
   return data;
 }

@@ -3,10 +3,28 @@ import { Button } from "@/components/ui/button";
 import { connectLinkedIn } from "@/utils/linkedinAuth";
 import { LinkedinIcon, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useNavigate } from "react-router-dom";
 
 export default function LinkedInLoginButton() {
   const [isLoading, setIsLoading] = useState(false);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    // Listen for auth state changes from the popup window
+    const { subscription } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_IN' && session) {
+        console.log('Auth state changed:', { event, session });
+        toast.success('Successfully signed in!');
+        navigate('/dashboard');
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [navigate]);
 
   const handleLinkedInLogin = async () => {
     try {
