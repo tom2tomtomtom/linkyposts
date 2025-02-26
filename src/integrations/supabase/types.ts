@@ -55,6 +55,7 @@ export type Database = {
           generated_content_id: string | null
           hashtags: string[] | null
           id: string
+          image_url: string | null
           is_current_version: boolean | null
           published_at: string | null
           scheduled_for: string | null
@@ -69,6 +70,7 @@ export type Database = {
           generated_content_id?: string | null
           hashtags?: string[] | null
           id?: string
+          image_url?: string | null
           is_current_version?: boolean | null
           published_at?: string | null
           scheduled_for?: string | null
@@ -83,6 +85,7 @@ export type Database = {
           generated_content_id?: string | null
           hashtags?: string[] | null
           id?: string
+          image_url?: string | null
           is_current_version?: boolean | null
           published_at?: string | null
           scheduled_for?: string | null
