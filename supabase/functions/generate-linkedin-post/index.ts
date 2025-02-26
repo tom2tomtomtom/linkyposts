@@ -2,7 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { extractArticleContent } from "./news.ts";
-import { createClient } from "./database.ts";
+import { createDbClient, saveGeneratedContent, saveLinkedInPosts } from "./database.ts";
 import { generateAnalysis } from "./openai.ts";
 
 const corsHeaders = {
@@ -50,7 +50,7 @@ serve(async (req) => {
       }
     }
 
-    const supabase = createClient();
+    const supabase = createDbClient();
 
     // Get user preferences
     const { data: preferences } = await supabase
@@ -97,21 +97,19 @@ serve(async (req) => {
 
     console.log(`Successfully generated ${posts.length} posts`);
 
-    // Store posts in the database
-    for (const postContent of posts) {
-      const { error: insertError } = await supabase
-        .from('linkedin_posts')
-        .insert({
-          content: postContent,
-          user_id: userId,
-          topic: isUrl ? articleTitle : topic,
-          is_current_version: true,
-        });
+    // Save generated content first
+    const generatedContentId = await saveGeneratedContent(
+      supabase,
+      userId,
+      isUrl ? articleTitle : topic,
+      defaultTone,
+      defaultPov,
+      writingSample,
+      { tone: defaultTone, pov: defaultPov }
+    );
 
-      if (insertError) {
-        console.error("Error inserting post:", insertError);
-      }
-    }
+    // Save the posts with reference to generated content
+    await saveLinkedInPosts(supabase, userId, generatedContentId, posts);
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
