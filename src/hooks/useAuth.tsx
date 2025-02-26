@@ -23,19 +23,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
 
   useEffect(() => {
-    const getSession = async () => {
+    const initializeAuth = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        setSession(session);
-        setUser(session?.user ?? null);
+        const { data: { session: currentSession }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Error getting session:', error);
+          throw error;
+        }
+
+        console.log('Initial session check:', { hasSession: !!currentSession });
+        setSession(currentSession);
+        setUser(currentSession?.user ?? null);
       } catch (error) {
-        console.error('Error getting session:', error);
+        console.error('Auth initialization error:', error);
       } finally {
         setIsLoading(false);
       }
     };
 
-    getSession();
+    initializeAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
@@ -49,7 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       subscription.unsubscribe();
     };
-  }, [navigate]);
+  }, []);
 
   const signIn = async (email: string, password: string) => {
     setIsLoading(true);
@@ -98,14 +105,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     try {
-      // Store the user ID before we clear everything
       const userId = user.id;
 
-      // First sign out from Supabase to invalidate the session
       const { error: signOutError } = await supabase.auth.signOut();
       if (signOutError) throw signOutError;
 
-      // Then try to clear LinkedIn tokens if they exist
       try {
         const { error: tokenError } = await supabase
           .from('linkedin_auth_tokens')
@@ -117,21 +121,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (tokenError) {
         console.error('Error during token cleanup:', tokenError);
-        // Continue with sign out even if token cleanup fails
       }
 
-      // Clear local state
       setSession(null);
       setUser(null);
       
-      // Navigate to home page
       navigate('/');
       toast.success('Successfully signed out');
     } catch (error: any) {
       console.error('Sign out error:', error);
       toast.error('Error signing out: ' + error.message);
-
-      // Force navigation to home page even if there's an error
       navigate('/');
     }
   };

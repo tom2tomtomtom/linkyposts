@@ -25,6 +25,7 @@ function ProtectedRoute() {
   }
   
   if (!user) {
+    console.log("No authenticated user found, redirecting to login");
     return <Navigate to="/auth/login" replace />;
   }
   
@@ -43,6 +44,7 @@ function PublicRoute() {
   }
   
   if (user) {
+    console.log("User already authenticated, redirecting to dashboard");
     return <Navigate to="/dashboard" replace />;
   }
   
@@ -50,6 +52,16 @@ function PublicRoute() {
 }
 
 function AppLayout() {
+  const { isLoading } = useAuth();
+  
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
   return (
     <AuthProvider>
       <Outlet />
