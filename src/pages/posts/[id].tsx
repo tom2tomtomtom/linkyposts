@@ -93,11 +93,21 @@ export default function PostDetail() {
 
     try {
       setIsGeneratingImage(true);
+      console.log('Generating image with prompt:', imagePrompt.trim());
+      
       const { data, error } = await supabase.functions.invoke("generate-post-image", {
-        body: { postId: id, prompt: imagePrompt.trim() }
+        body: { 
+          postId: id, 
+          prompt: imagePrompt.trim() 
+        }
       });
 
-      if (error) throw error;
+      console.log('Image generation response:', data);
+
+      if (error) {
+        console.error('Image generation error:', error);
+        throw error;
+      }
 
       if (data?.imageUrl) {
         const { error: updateError } = await supabase
@@ -105,15 +115,20 @@ export default function PostDetail() {
           .update({ image_url: data.imageUrl })
           .eq("id", id);
 
-        if (updateError) throw updateError;
+        if (updateError) {
+          console.error('Error updating post with image:', updateError);
+          throw updateError;
+        }
 
         queryClient.invalidateQueries({ queryKey: ["post", id] });
         toast.success("Image generated successfully");
         setImagePrompt(""); // Clear the prompt after successful generation
+      } else {
+        throw new Error('No image URL received');
       }
     } catch (error: any) {
       console.error("Error generating image:", error);
-      toast.error("Failed to generate image");
+      toast.error("Failed to generate image: " + error.message);
     } finally {
       setIsGeneratingImage(false);
     }

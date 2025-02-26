@@ -23,6 +23,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const initializeAuth = async () => {
       try {
+        // Configure Supabase to persist sessions
+        await supabase.auth.getSession();
+        
         const { data: { session: currentSession }, error } = await supabase.auth.getSession();
         
         if (error) {
@@ -115,3 +118,4 @@ export function useAuth() {
   }
   return context;
 }
+
