@@ -1,135 +1,114 @@
 
-// @deno-types="https://deno.land/x/cheerio@1.0.7/types/cheerio.d.ts"
-import * as cheerio from "cheerio";
+import cheerio from "cheerio";
 
 interface Article {
   title: string;
   content: string;
   url: string;
   publishedDate?: string;
-  author?: string;
 }
 
-export async function extractArticleContent(url: string): Promise<Article> {
-  console.log("Extracting content from URL:", url);
-  
+export async function extractArticleContent(url: string): Promise<Article | null> {
+  console.log("Attempting to extract content from URL:", url);
   try {
     const response = await fetch(url);
     const html = await response.text();
+    console.log("Successfully fetched HTML content");
+
     const $ = cheerio.load(html);
+    console.log("Cheerio loaded successfully");
 
     // Extract title
     let title = $('meta[property="og:title"]').attr('content') || 
                 $('meta[name="twitter:title"]').attr('content') || 
-                $('title').text() || '';
-
-    // Extract published date
-    const publishedDate = $('meta[property="article:published_time"]').attr('content') ||
-                         $('meta[name="pubdate"]').attr('content');
-
-    // Extract author
-    const author = $('meta[name="author"]').attr('content') ||
-                  $('.author').first().text() ||
-                  $('[rel="author"]').first().text();
-
-    // Remove unwanted elements
-    $('script, style, nav, header, footer, iframe, .ad, .advertisement, .social-share').remove();
+                $('title').text();
 
     // Extract main content
     let content = '';
-    const article = $('article').first();
-    if (article.length) {
-      content = article.text();
-    } else {
-      // Try different content selectors
-      const mainContent = $('main').first();
-      if (mainContent.length) {
-        content = mainContent.text();
-      } else {
-        // Fallback to looking for article-like content
-        const paragraphs = $('p').map((_, el) => $(el).text()).get();
-        content = paragraphs.join('\n\n');
+    
+    // Try different content selectors
+    const possibleContentSelectors = [
+      'article',
+      '.article-content',
+      '.post-content',
+      'main',
+      '[role="main"]',
+      '.content',
+      '#content'
+    ];
+
+    for (const selector of possibleContentSelectors) {
+      const element = $(selector);
+      if (element.length) {
+        content = element.text().trim();
+        break;
       }
     }
 
-    // Clean up the content
+    // If no content found, try paragraphs
+    if (!content) {
+      content = $('p').map((_, el) => $(el).text().trim()).get().join('\n\n');
+    }
+
+    // Clean up content
     content = content
       .replace(/\s+/g, ' ')
       .replace(/\n\s*\n/g, '\n\n')
       .trim();
 
     console.log("Successfully extracted content:", {
-      titleLength: title.length,
-      contentLength: content.length,
-      hasPublishedDate: !!publishedDate,
-      hasAuthor: !!author
+      titleLength: title?.length,
+      contentLength: content?.length
     });
 
     return {
-      title,
-      content,
-      url,
-      publishedDate,
-      author
+      title: title || 'Untitled Article',
+      content: content || 'No content found',
+      url: url
     };
   } catch (error) {
-    console.error("Error extracting article content:", error);
-    throw new Error(`Failed to extract content from URL: ${error.message}`);
+    console.error("Error extracting content:", error);
+    throw new Error(`Failed to extract content: ${error.message}`);
   }
 }
 
 export async function findRelatedArticles(topic: string): Promise<Article[]> {
+  console.log("Finding related articles for topic:", topic);
+  
   const newsApiKey = Deno.env.get('NEWS_API_KEY');
   if (!newsApiKey) {
-    console.log("No NEWS_API_KEY found, skipping related articles search");
+    console.log("No NEWS_API_KEY found, skipping related articles");
     return [];
   }
 
   try {
-    console.log("Searching for related articles about:", topic);
-    
     const encodedTopic = encodeURIComponent(topic);
-    const response = await fetch(
-      `https://newsapi.org/v2/everything?q=${encodedTopic}&sortBy=relevancy&pageSize=3&language=en`,
-      {
-        headers: {
-          'X-Api-Key': newsApiKey
-        }
+    const url = `https://newsapi.org/v2/everything?q=${encodedTopic}&language=en&sortBy=relevancy&pageSize=3`;
+    
+    const response = await fetch(url, {
+      headers: {
+        'X-Api-Key': newsApiKey
       }
-    );
+    });
 
     const data = await response.json();
-    
-    if (!data.articles) {
-      console.log("No related articles found");
-      return [];
+    console.log("News API response:", {
+      status: data.status,
+      totalResults: data.totalResults
+    });
+
+    if (data.status === 'ok' && data.articles) {
+      return data.articles.map((article: any) => ({
+        title: article.title,
+        content: article.description || article.content || '',
+        url: article.url,
+        publishedDate: article.publishedAt
+      }));
     }
 
-    console.log(`Found ${data.articles.length} related articles`);
-
-    const articles: Article[] = await Promise.all(
-      data.articles.map(async (article: any) => {
-        try {
-          // Extract content from each related article
-          const fullArticle = await extractArticleContent(article.url);
-          return fullArticle;
-        } catch (error) {
-          console.error("Error extracting related article content:", error);
-          // Return basic article info if full content extraction fails
-          return {
-            title: article.title,
-            content: article.description || "",
-            url: article.url,
-            publishedDate: article.publishedAt,
-            author: article.author
-          };
-        }
-      })
-    );
-
-    return articles;
+    return [];
   } catch (error) {
-    console.error("Error finding related articles:", error);
+    console.error("Error fetching related articles:", error);
     return [];
   }
 }
