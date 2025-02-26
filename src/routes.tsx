@@ -1,6 +1,6 @@
 
 import { createBrowserRouter, Navigate, Outlet } from "react-router-dom";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth, AuthProvider } from "@/hooks/useAuth";
 import Index from "@/pages/Index";
 import NotFound from "@/pages/NotFound";
 import LoginPage from "@/pages/auth/LoginPage";
@@ -47,46 +47,59 @@ function PublicRoute() {
   return <Outlet />;
 }
 
+function AppLayout() {
+  return (
+    <AuthProvider>
+      <Outlet />
+    </AuthProvider>
+  );
+}
+
 export const router = createBrowserRouter([
   {
-    path: "/",
-    element: <Index />
-  },
-  {
-    element: <PublicRoute />,
+    element: <AppLayout />,
     children: [
       {
-        path: "auth/login",
-        element: <LoginPage />
+        path: "/",
+        element: <Index />
       },
       {
-        path: "auth/signup",
-        element: <SignupPage />
-      }
-    ]
-  },
-  {
-    element: <ProtectedRoute />,
-    children: [
-      {
-        path: "dashboard",
-        element: <Dashboard />
+        element: <PublicRoute />,
+        children: [
+          {
+            path: "auth/login",
+            element: <LoginPage />
+          },
+          {
+            path: "auth/signup",
+            element: <SignupPage />
+          }
+        ]
       },
       {
-        path: "posts",
-        element: <Posts />
-      },
-      {
-        path: "posts/generate",
-        element: <GeneratePost />
-      },
-      {
-        path: "posts/:id",
-        element: <PostDetail />
-      },
-      {
-        path: "settings",
-        element: <Settings />
+        element: <ProtectedRoute />,
+        children: [
+          {
+            path: "dashboard",
+            element: <Dashboard />
+          },
+          {
+            path: "posts",
+            element: <Posts />
+          },
+          {
+            path: "posts/generate",
+            element: <GeneratePost />
+          },
+          {
+            path: "posts/:id",
+            element: <PostDetail />
+          },
+          {
+            path: "settings",
+            element: <Settings />
+          }
+        ]
       }
     ]
   },
