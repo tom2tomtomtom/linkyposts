@@ -1,6 +1,6 @@
 
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { extractArticle } from "npm:@extractus/article-extractor";
 
 const corsHeaders = {
@@ -9,13 +9,12 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
-  // Handle CORS
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Parse request
     const { userId, topic, tone = "", pov = "", writingSample = "", industry = "", numPosts = 3, includeNews = true } = await req.json();
     console.log("Received request:", { userId, topic, tone, pov, numPosts, includeNews });
 
@@ -32,7 +31,11 @@ serve(async (req) => {
     if (isUrl) {
       try {
         console.log("Extracting content from URL:", topic);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
         const article = await extractArticle(topic);
+        clearTimeout(timeout);
         
         if (!article) {
           throw new Error('Failed to extract article content');
@@ -46,7 +49,14 @@ serve(async (req) => {
         });
       } catch (error) {
         console.error("Error extracting article:", error);
-        throw new Error(`Failed to extract article content: ${error.message}`);
+        return new Response(
+          JSON.stringify({ 
+            error: 'Failed to extract article content. Please try again with a different URL or enter your topic directly.' 
+          }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
       }
     }
 
@@ -68,77 +78,89 @@ ${industry ? `- Industry context: ${industry}` : ""}
 ${writingSample ? `- Match this writing style: ${writingSample}` : ""}`;
 
     const userPrompt = context 
-      ? `Create ${numPosts} LinkedIn posts based on this article: "${mainContent}"
+      ? `Generate ${numPosts} unique LinkedIn posts based on this article: "${mainContent}"
 
 Article content:
 ${context}
 
 Make each post unique, focusing on different aspects or insights from the article.`
-      : `Create ${numPosts} engaging LinkedIn posts about: ${mainContent}
+      : `Generate ${numPosts} engaging LinkedIn posts about: ${mainContent}
 
 Make each post unique, offering different perspectives or insights about the topic.`;
 
-    // Generate content using OpenAI
-    console.log("Calling OpenAI with prompt length:", userPrompt.length);
-    const openAIResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: "gpt-4o-mini",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt }
-        ],
-        temperature: 0.7,
-        max_tokens: 2500,
-      }),
-    });
+    console.log("Sending prompt to OpenAI:", userPrompt);
+    
+    // Generate content using OpenAI with timeout
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60000); // 60 second timeout
 
-    if (!openAIResponse.ok) {
-      const error = await openAIResponse.text();
-      console.error("OpenAI API error:", error);
-      throw new Error(`OpenAI API error: ${error}`);
-    }
+    try {
+      const openAIResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          temperature: 0.7,
+          max_tokens: 2500,
+        }),
+        signal: controller.signal,
+      });
 
-    const openAIData = await openAIResponse.json();
-    const generatedContent = openAIData.choices[0]?.message?.content;
+      clearTimeout(timeout);
 
-    if (!generatedContent) {
-      throw new Error('No content generated from OpenAI');
-    }
-
-    // Split and validate posts
-    const posts = generatedContent
-      .split(/\n{2,}/)
-      .filter(post => {
-        const wordCount = post.trim().split(/\s+/).length;
-        const hasHashtags = /#[\w-]+/.test(post);
-        const hasEmoji = /[\p{Emoji}]/u.test(post);
-        const hasQuestion = /\?/.test(post);
-        
-        return wordCount >= 300 && hasHashtags && hasEmoji && hasQuestion;
-      })
-      .map(post => post.trim());
-
-    if (posts.length === 0) {
-      console.error("Generated content failed validation:", generatedContent);
-      throw new Error('Generated content did not meet quality standards');
-    }
-
-    console.log(`Successfully generated ${posts.length} valid posts`);
-
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        posts 
-      }), 
-      { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      if (!openAIResponse.ok) {
+        const error = await openAIResponse.text();
+        console.error("OpenAI API error:", error);
+        throw new Error(`OpenAI API error: ${error}`);
       }
-    );
+
+      const openAIData = await openAIResponse.json();
+      const generatedContent = openAIData.choices[0]?.message?.content;
+
+      if (!generatedContent) {
+        throw new Error('No content generated from OpenAI');
+      }
+
+      // Split and validate posts
+      const posts = generatedContent
+        .split(/\n{2,}/)
+        .filter(post => {
+          const wordCount = post.trim().split(/\s+/).length;
+          const hasHashtags = /#[\w-]+/.test(post);
+          const hasEmoji = /[\p{Emoji}]/u.test(post);
+          const hasQuestion = /\?/.test(post);
+          
+          return wordCount >= 300 && hasHashtags && hasEmoji && hasQuestion;
+        })
+        .map(post => post.trim());
+
+      if (posts.length === 0) {
+        console.error("Generated content failed validation:", generatedContent);
+        throw new Error('Generated content did not meet quality standards');
+      }
+
+      console.log(`Successfully generated ${posts.length} valid posts`);
+
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          posts 
+        }), 
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    } catch (error) {
+      clearTimeout(timeout);
+      throw error;
+    }
   } catch (error) {
     console.error("Error in generate-linkedin-post function:", error);
     return new Response(
@@ -153,3 +175,4 @@ Make each post unique, offering different perspectives or insights about the top
     );
   }
 });
+

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -113,12 +114,24 @@ export default function GeneratePost() {
       });
 
       if (error) throw error;
+      
+      if (!data?.success || !data?.posts) {
+        throw new Error(data?.error || 'Failed to generate posts');
+      }
 
       toast.success("Posts generated successfully!");
       navigate("/posts");
     } catch (error: any) {
       console.error("Error generating posts:", error);
-      toast.error(error.message || "Failed to generate posts");
+      const errorMessage = error.message || "Failed to generate posts";
+      
+      if (error.message?.includes('Failed to fetch') || error.message?.includes('Failed to send')) {
+        toast.error("Network error. Please try again in a few moments.");
+      } else if (error.message?.includes('extract article')) {
+        toast.error("Could not extract article content. Please try a different URL or enter your topic directly.");
+      } else {
+        toast.error(errorMessage);
+      }
     } finally {
       setIsGenerating(false);
     }
