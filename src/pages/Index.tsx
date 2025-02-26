@@ -12,6 +12,9 @@ const Index = () => {
         
         <div className="mx-auto max-w-2xl py-32 sm:py-48 lg:py-56">
           <div className="text-center">
+            <h2 className="text-lg font-semibold leading-8 text-[#0A66C2] mb-2">
+              MAI_WORD
+            </h2>
             <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-6xl">
               AI-Powered LinkedIn Posts
             </h1>
@@ -168,3 +171,4 @@ const features = [
 ];
 
 export default Index;
+
