@@ -1,5 +1,5 @@
 
-import { createContext, useContext, useEffect, useState, ErrorInfo } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
@@ -20,7 +20,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -31,7 +30,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(session?.user ?? null);
       } catch (error) {
         console.error('Error getting session:', error);
-        setError(error as Error);
       } finally {
         setIsLoading(false);
       }
@@ -41,22 +39,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
-        try {
-          console.log('Auth state change:', { event: _event, hasSession: !!session });
-          setSession(session);
-          setUser(session?.user ?? null);
-          setIsLoading(false);
-          
-          if (_event === 'SIGNED_IN') {
-            navigate('/dashboard');
-            toast.success('Successfully signed in!');
-          } else if (_event === 'SIGNED_OUT') {
-            navigate('/');
-            toast.success('Successfully signed out');
-          }
-        } catch (error) {
-          console.error('Auth state change error:', error);
-          setError(error as Error);
+        console.log('Auth state change:', { event: _event, hasSession: !!session });
+        setSession(session);
+        setUser(session?.user ?? null);
+        setIsLoading(false);
+        
+        if (_event === 'SIGNED_IN') {
+          navigate('/dashboard');
+          toast.success('Successfully signed in!');
+        } else if (_event === 'SIGNED_OUT') {
+          navigate('/');
+          toast.success('Successfully signed out');
         }
       }
     );
@@ -115,25 +108,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-red-500">
-          An error occurred: {error.message}
-        </div>
-      </div>
-    );
-  }
+  const value = {
+    user,
+    session,
+    isLoading,
+    signIn,
+    signUp,
+    signOut,
+  };
 
   return (
-    <AuthContext.Provider value={{
-      user,
-      session,
-      isLoading,
-      signIn,
-      signUp,
-      signOut,
-    }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
