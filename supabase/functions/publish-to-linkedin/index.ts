@@ -8,6 +8,7 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -37,6 +38,8 @@ serve(async (req) => {
       throw new Error('LinkedIn token expired')
     }
 
+    console.log('Publishing to LinkedIn with token:', { userId, hasToken: !!tokenData.access_token });
+
     // Post to LinkedIn
     const response = await fetch('https://api.linkedin.com/v2/ugcPosts', {
       method: 'POST',
@@ -63,10 +66,12 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorData = await response.json()
+      console.error('LinkedIn API error:', errorData);
       throw new Error(`LinkedIn API error: ${JSON.stringify(errorData)}`)
     }
 
     const linkedinResponse = await response.json()
+    console.log('LinkedIn post created:', linkedinResponse);
 
     return new Response(
       JSON.stringify({ success: true, postId: linkedinResponse.id }),
@@ -77,6 +82,7 @@ serve(async (req) => {
     )
 
   } catch (error) {
+    console.error('Error in publish-to-linkedin function:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
       { 
