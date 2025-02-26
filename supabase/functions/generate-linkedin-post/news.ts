@@ -1,54 +1,60 @@
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { NewsArticle } from './types.ts';
+interface Article {
+  title: string;
+  content: string;
+  url: string;
+}
 
-export const fetchNewsForTopic = async (
-  topic: string,
-  industry?: string
-): Promise<NewsArticle[]> => {
-  const supabaseClient = createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-  );
-
+export async function extractArticleContent(url: string): Promise<Article> {
   try {
-    const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+    const response = await fetch(url);
+    const html = await response.text();
     
-    // Build the query
-    let query = supabaseClient
-      .from('news_articles')
-      .select('*')
-      .gte('published_date', twoWeeksAgo)
-      .order('published_date', { ascending: false });
+    // Extract title
+    const titleMatch = html.match(/<title>(.*?)<\/title>/i);
+    const title = titleMatch ? titleMatch[1] : '';
 
-    // Add topic filter
-    if (topic) {
-      query = query.or(`title.ilike.%${topic}%,content.ilike.%${topic}%`);
+    // Extract article content
+    // First try to find article or main content
+    let content = '';
+    const articleContent = html.match(/<article[^>]*>([\s\S]*?)<\/article>/i);
+    const mainContent = html.match(/<main[^>]*>([\s\S]*?)<\/main>/i);
+    
+    if (articleContent) {
+      content = articleContent[1];
+    } else if (mainContent) {
+      content = mainContent[1];
+    } else {
+      // Fallback to body content
+      const bodyContent = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i);
+      if (bodyContent) {
+        content = bodyContent[1];
+      }
     }
 
-    // Add industry filter if provided
-    if (industry) {
-      query = query.eq('industry', industry);
+    // Clean up the content
+    content = content
+      // Remove HTML tags
+      .replace(/<[^>]*>/g, ' ')
+      // Remove extra whitespace
+      .replace(/\s+/g, ' ')
+      // Remove special characters
+      .replace(/[^\w\s.,!?-]/g, '')
+      .trim();
+
+    // Limit content length to prevent token limits
+    const maxLength = 2000;
+    if (content.length > maxLength) {
+      content = content.substring(0, maxLength) + '...';
     }
 
-    const { data: newsArticles, error: newsError } = await query.limit(8);
-
-    if (newsError) {
-      console.error('Error fetching news:', newsError);
-      return [];
-    }
-
-    console.log(`Found ${newsArticles?.length || 0} news articles for topic: ${topic}`);
-
-    return (newsArticles || []).map(article => ({
-      title: article.title,
-      source: article.source,
-      url: article.url,
-      publishedDate: article.published_date,
-      snippet: article.snippet || ''
-    }));
+    return {
+      title,
+      content,
+      url
+    };
   } catch (error) {
-    console.error('Error processing news:', error);
-    return [];
+    console.error("Error extracting article content:", error);
+    throw new Error(`Failed to extract content from URL: ${error.message}`);
   }
-};
+}
