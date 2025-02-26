@@ -1,5 +1,5 @@
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, ErrorInfo } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useNavigate } from 'react-router-dom';
@@ -21,28 +21,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     const getSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setSession(session);
-      setUser(session?.user ?? null);
-      setIsLoading(false);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        setSession(session);
+        setUser(session?.user ?? null);
+      } catch (error) {
+        console.error('Error getting session:', error);
+        setError(error as Error);
+      } finally {
+        setIsLoading(false);
+      }
     };
 
     getSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setIsLoading(false);
-        
-        if (_event === 'SIGNED_IN') {
-          navigate('/dashboard');
-        } else if (_event === 'SIGNED_OUT') {
-          navigate('/');
+      async (_event, session) => {
+        try {
+          setSession(session);
+          setUser(session?.user ?? null);
+          setIsLoading(false);
+          
+          if (_event === 'SIGNED_IN') {
+            navigate('/dashboard');
+          } else if (_event === 'SIGNED_OUT') {
+            navigate('/');
+          }
+        } catch (error) {
+          console.error('Auth state change error:', error);
+          setError(error as Error);
         }
       }
     );
@@ -119,6 +131,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsLoading(false);
     }
   };
+
+  if (error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-red-500">
+          An error occurred: {error.message}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AuthContext.Provider value={{
