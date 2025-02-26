@@ -2,10 +2,10 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { NewsArticle } from './types.ts';
 
-export async function fetchNewsForTopic(
+export const fetchNewsForTopic = async (
   topic: string,
   industry?: string
-): Promise<NewsArticle[]> {
+): Promise<NewsArticle[]> => {
   const supabaseClient = createClient(
     Deno.env.get('SUPABASE_URL') ?? '',
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -51,5 +51,4 @@ export async function fetchNewsForTopic(
     console.error('Error processing news:', error);
     return [];
   }
-}
-
+};
