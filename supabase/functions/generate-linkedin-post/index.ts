@@ -34,6 +34,11 @@ serve(async (req) => {
       hasWritingSample: !!writingSample
     })
 
+    if (!userId || !topic) {
+      console.error('Missing required parameters');
+      throw new Error('Missing required parameters');
+    }
+
     const supabase = createClient<Database>(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -139,3 +144,4 @@ serve(async (req) => {
     )
   }
 })
+
