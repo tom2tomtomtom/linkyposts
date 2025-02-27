@@ -8,13 +8,15 @@ const supabase_url = Deno.env.get('SUPABASE_URL');
 const supabase_service_role = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders });
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
     const { postId, userId, postContent, topic, customPrompt } = await req.json();
 
+    // Validate required parameters
     if (!postContent) {
       throw new Error('postContent is required');
     }
@@ -27,6 +29,10 @@ serve(async (req) => {
       throw new Error('postId is required');
     }
 
+    if (!stability_api_key) {
+      throw new Error('STABILITY_API_KEY is not configured');
+    }
+
     // Initialize Supabase client
     const supabase = createClient(
       supabase_url!,
@@ -37,6 +43,24 @@ serve(async (req) => {
     const prompt = customPrompt?.trim() || generatePromptFromContent(postContent, topic);
 
     console.log('Using prompt:', prompt);
+    
+    // Prepare request body for Stability API
+    const requestBody = {
+      steps: 40,
+      width: 1024,
+      height: 576,
+      seed: 0,
+      cfg_scale: 7,
+      samples: 1,
+      text_prompts: [
+        {
+          text: prompt,
+          weight: 1
+        }
+      ],
+    };
+
+    console.log('Stability API request body:', JSON.stringify(requestBody));
 
     // Call Stability API
     const response = await fetch(
@@ -47,28 +71,26 @@ serve(async (req) => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${stability_api_key}`,
         },
-        body: JSON.stringify({
-          steps: 40,
-          width: 1024,
-          height: 576,
-          seed: 0,
-          cfg_scale: 7,
-          samples: 1,
-          text_prompts: [
-            {
-              "text": prompt,
-              "weight": 1
-            }
-          ],
-        }),
+        body: JSON.stringify(requestBody),
       }
     );
 
+    // Log the response status and any error message
+    console.log('Stability API response status:', response.status);
+    
     if (!response.ok) {
-      throw new Error(`Stability API error: ${response.statusText}`);
+      const errorText = await response.text();
+      console.error('Stability API error response:', errorText);
+      throw new Error(`Stability API error (${response.status}): ${errorText}`);
     }
 
     const result = await response.json();
+    
+    if (!result.artifacts?.[0]?.base64) {
+      console.error('Unexpected Stability API response format:', result);
+      throw new Error('Invalid response format from Stability API');
+    }
+
     const base64Image = result.artifacts[0].base64;
     
     // Store image in post_images table
@@ -86,6 +108,7 @@ serve(async (req) => {
       .single();
 
     if (imageError) {
+      console.error('Error storing image data:', imageError);
       throw imageError;
     }
 
@@ -99,6 +122,7 @@ serve(async (req) => {
       .eq('id', postId);
 
     if (updateError) {
+      console.error('Error updating post with image URL:', updateError);
       throw updateError;
     }
 
@@ -116,7 +140,10 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in generate-post-image function:', error);
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ 
+        error: error instanceof Error ? error.message : 'An unknown error occurred',
+        details: error instanceof Error ? error.stack : undefined
+      }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 500,
@@ -130,5 +157,7 @@ function generatePromptFromContent(content: string, topic?: string): string {
   const topicPrompt = topic ? `The image should relate to ${topic}. ` : "";
   const contentPrompt = `The image should convey the essence of this message: ${content.substring(0, 200)}...`;
   
-  return basePrompt + topicPrompt + contentPrompt;
+  const fullPrompt = basePrompt + topicPrompt + contentPrompt;
+  // Ensure the prompt isn't too long for the API
+  return fullPrompt.substring(0, 1000);
 }
