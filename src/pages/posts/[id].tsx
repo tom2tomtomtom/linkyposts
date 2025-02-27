@@ -94,14 +94,27 @@ export default function PostDetail() {
     try {
       setIsPublishing(true);
 
-      const { data: existingToken } = await supabase
+      // First check if user has valid LinkedIn credentials
+      const { data: linkedInTokens, error: tokenError } = await supabase
+        .from('linkedin_auth_tokens')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+
+      if (tokenError || !linkedInTokens) {
+        throw new Error('Please connect your LinkedIn account before publishing');
+      }
+
+      const { data: existingToken, error } = await supabase
         .functions.invoke("linkedin-publish", {
           body: { 
             linkedInPostId: id,
-            generateImage: post.image_url === null, // Only generate if no image exists
+            generateImage: post.image_url === null,
             imagePrompt: `Professional LinkedIn image related to: ${post.topic}. Create a visually appealing, corporate-friendly image suitable for a LinkedIn post.`
           }
         });
+
+      if (error) throw error;
 
       if (existingToken?.postUrl) {
         toast.success("Successfully published to LinkedIn!", {
@@ -115,7 +128,21 @@ export default function PostDetail() {
       }
     } catch (error: any) {
       console.error("Error publishing to LinkedIn:", error);
-      toast.error(error.message || "Failed to publish to LinkedIn. Please try reconnecting your account.");
+      
+      if (error.message.includes('LinkedIn connection has expired')) {
+        // Clear the existing token and prompt user to reconnect
+        toast.error("Your LinkedIn connection has expired. Please reconnect your account.", {
+          action: {
+            label: "Reconnect",
+            onClick: () => {
+              // Trigger LinkedIn reconnect flow
+              window.location.href = '/settings';
+            },
+          },
+        });
+      } else {
+        toast.error(error.message || "Failed to publish to LinkedIn");
+      }
     } finally {
       setIsPublishing(false);
       setShowPublishConfirm(false);
