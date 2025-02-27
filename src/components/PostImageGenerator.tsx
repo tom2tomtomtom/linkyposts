@@ -22,7 +22,7 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
   const queryClient = useQueryClient();
 
   // Query both the post image and post content
-  const { data: existingData } = useQuery({
+  const { data: existingData, isLoading } = useQuery({
     queryKey: ["post_data", postId],
     queryFn: async () => {
       if (!user?.id) return null;
@@ -43,7 +43,9 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
 
       console.log("Query results:", { imageResult, postResult });
 
-      if (imageResult.error) throw imageResult.error;
+      if (imageResult.error && imageResult.error.message !== 'No rows found') {
+        throw imageResult.error;
+      }
       if (postResult.error) throw postResult.error;
 
       return {
@@ -120,6 +122,16 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
 
   // Get the image URL either from the post_images table or directly from the linkedin_posts table
   const imageUrl = existingData?.postImageUrl || existingData?.existingImage?.image_url;
+
+  if (isLoading) {
+    return (
+      <Card className="p-4 mt-4">
+        <div className="flex items-center justify-center">
+          <Loader2 className="w-6 h-6 animate-spin" />
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Card className="p-4 mt-4">
