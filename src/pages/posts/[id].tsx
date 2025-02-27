@@ -4,12 +4,13 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Share2, Loader2, Copy, Trash2 } from "lucide-react";
+import { Share2, Loader2, Copy, Trash2, Pencil, Save, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { connectLinkedIn, publishToLinkedIn } from "@/utils/linkedinAuth";
 import { PostImageGenerator } from "@/components/PostImageGenerator";
+import { Textarea } from "@/components/ui/textarea";
 
 export default function PostDetail() {
   const { id } = useParams();
@@ -18,6 +19,8 @@ export default function PostDetail() {
   const queryClient = useQueryClient();
   const [isPublishing, setIsPublishing] = React.useState(false);
   const [isDeleting, setIsDeleting] = React.useState(false);
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [editedContent, setEditedContent] = React.useState("");
 
   const { data: post, isLoading } = useQuery({
     queryKey: ["post", id],
@@ -50,6 +53,42 @@ export default function PostDetail() {
     },
     enabled: !!user?.id
   });
+
+  React.useEffect(() => {
+    if (post?.content) {
+      setEditedContent(post.content);
+    }
+  }, [post?.content]);
+
+  const handleStartEdit = () => {
+    setIsEditing(true);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditedContent(post?.content || "");
+  };
+
+  const handleSaveEdit = async () => {
+    if (!id || !user?.id || !editedContent) return;
+
+    try {
+      const { error } = await supabase
+        .from("linkedin_posts")
+        .update({ content: editedContent })
+        .eq("id", id)
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+
+      toast.success("Post updated successfully");
+      setIsEditing(false);
+      queryClient.invalidateQueries({ queryKey: ["post", id] });
+    } catch (error: any) {
+      console.error("Error updating post:", error);
+      toast.error("Failed to update post");
+    }
+  };
 
   const handlePublish = async () => {
     if (!user?.id || !post?.content) {
@@ -176,42 +215,80 @@ export default function PostDetail() {
             )}
           </div>
           <div className="flex gap-2">
-            <Button
-              variant="outline"
-              onClick={handleCopyToClipboard}
-              className="flex items-center gap-2"
-            >
-              <Copy className="w-4 h-4" />
-              Copy
-            </Button>
-            <Button
-              variant="outline"
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="flex items-center gap-2 text-red-600 hover:bg-red-50"
-            >
-              {isDeleting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Trash2 className="w-4 h-4" />
-              )}
-              Delete
-            </Button>
-            <Button
-              onClick={handlePublish}
-              disabled={isPublishing || !!post.linkedin_post_id}
-            >
-              {isPublishing ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Share2 className="w-4 h-4 mr-2" />
-              )}
-              {post.linkedin_post_id ? "Published" : "Publish to LinkedIn"}
-            </Button>
+            {isEditing ? (
+              <>
+                <Button
+                  variant="secondary"
+                  onClick={handleCancelEdit}
+                  className="flex items-center gap-2"
+                >
+                  <X className="w-4 h-4" />
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleSaveEdit}
+                  className="flex items-center gap-2"
+                >
+                  <Save className="w-4 h-4" />
+                  Save
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={handleCopyToClipboard}
+                  className="flex items-center gap-2"
+                >
+                  <Copy className="w-4 h-4" />
+                  Copy
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleStartEdit}
+                  className="flex items-center gap-2"
+                >
+                  <Pencil className="w-4 h-4" />
+                  Edit
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleDelete}
+                  disabled={isDeleting}
+                  className="flex items-center gap-2 text-red-600 hover:bg-red-50"
+                >
+                  {isDeleting ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-4 h-4" />
+                  )}
+                  Delete
+                </Button>
+                <Button
+                  onClick={handlePublish}
+                  disabled={isPublishing || !!post.linkedin_post_id}
+                >
+                  {isPublishing ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Share2 className="w-4 h-4 mr-2" />
+                  )}
+                  {post.linkedin_post_id ? "Published" : "Publish to LinkedIn"}
+                </Button>
+              </>
+            )}
           </div>
         </div>
         
-        <div className="whitespace-pre-wrap">{post.content}</div>
+        {isEditing ? (
+          <Textarea
+            value={editedContent}
+            onChange={(e) => setEditedContent(e.target.value)}
+            className="min-h-[200px] mb-4"
+          />
+        ) : (
+          <div className="whitespace-pre-wrap">{post.content}</div>
+        )}
         
         {post.hashtags && post.hashtags.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-2">
@@ -235,4 +312,3 @@ export default function PostDetail() {
     </div>
   );
 }
-
