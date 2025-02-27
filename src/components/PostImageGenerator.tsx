@@ -6,7 +6,7 @@ import { Image } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 interface PostImageGeneratorProps {
   postId: string;
@@ -17,6 +17,7 @@ interface PostImageGeneratorProps {
 export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImageGeneratorProps) {
   const { user } = useAuth();
   const [isGenerating, setIsGenerating] = React.useState(false);
+  const queryClient = useQueryClient();
 
   // Query both the post image and post content
   const { data: existingData } = useQuery({
@@ -33,17 +34,20 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
           
         supabase
           .from("linkedin_posts")
-          .select("content")
+          .select("content, image_url")
           .eq("id", postId)
           .single()
       ]);
+
+      console.log("Query results:", { imageResult, postResult });
 
       if (imageResult.error) throw imageResult.error;
       if (postResult.error) throw postResult.error;
 
       return {
         existingImage: imageResult.data,
-        postContent: postResult.data?.content
+        postContent: postResult.data?.content,
+        postImageUrl: postResult.data?.image_url
       };
     },
     enabled: !!user?.id && !!postId,
@@ -89,7 +93,12 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
         throw new Error("No image URL returned from function");
       }
 
+      // Call the callback with the new image URL
       onImageGenerated?.(data.imageUrl);
+
+      // Invalidate the query to refresh the UI
+      await queryClient.invalidateQueries({ queryKey: ["post_data", postId] });
+
       toast.success("Image generated successfully!");
     } catch (error: any) {
       console.error("Error generating image:", error);
@@ -99,12 +108,15 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
     }
   };
 
+  // Get the image URL either from the post_images table or directly from the linkedin_posts table
+  const imageUrl = existingData?.postImageUrl || existingData?.existingImage?.image_url;
+
   return (
     <Card className="p-4 mt-4">
-      {existingData?.existingImage?.image_url ? (
+      {imageUrl ? (
         <div>
           <img
-            src={existingData.existingImage.image_url}
+            src={imageUrl}
             alt="Generated post image"
             className="w-full rounded-md mb-2"
           />
