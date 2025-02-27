@@ -8,7 +8,6 @@ import { Share2, Loader2, Copy, Trash2, Pencil, Save, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-import { connectLinkedIn, publishToLinkedIn } from "@/utils/linkedinAuth";
 import { PostImageGenerator } from "@/components/PostImageGenerator";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -37,21 +36,6 @@ export default function PostDetail() {
       return data;
     },
     enabled: !!id
-  });
-
-  const { data: linkedinToken } = useQuery({
-    queryKey: ["linkedin_token", user?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("linkedin_auth_tokens")
-        .select("*")
-        .eq("user_id", user?.id)
-        .maybeSingle();
-      
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!user?.id
   });
 
   React.useEffect(() => {
@@ -98,37 +82,29 @@ export default function PostDetail() {
 
     try {
       setIsPublishing(true);
-      
-      if (!linkedinToken) {
-        toast.info("Please connect your LinkedIn account first");
-        await connectLinkedIn();
-        return;
+
+      const { data: existingToken } = await supabase
+        .functions.invoke("linkedin-publish", {
+          body: { 
+            linkedInPostId: id,
+            generateImage: post.image_url === null, // Only generate if no image exists
+            imagePrompt: `Professional LinkedIn image related to: ${post.topic}. Create a visually appealing, corporate-friendly image suitable for a LinkedIn post.`
+          }
+        });
+
+      if (existingToken?.postUrl) {
+        toast.success("Successfully published to LinkedIn!", {
+          action: {
+            label: "View Post",
+            onClick: () => window.open(existingToken.postUrl, "_blank"),
+          },
+        });
+        
+        queryClient.invalidateQueries({ queryKey: ["post", id] });
       }
-
-      if (linkedinToken.expires_at && new Date(linkedinToken.expires_at) < new Date()) {
-        toast.info("LinkedIn connection expired, please reconnect");
-        await connectLinkedIn();
-        return;
-      }
-
-      const result = await publishToLinkedIn(post.content, user.id);
-      
-      if (result.postId) {
-        const { error: updateError } = await supabase
-          .from("linkedin_posts")
-          .update({ 
-            linkedin_post_id: result.postId,
-            published_at: new Date().toISOString()
-          })
-          .eq("id", post.id);
-
-        if (updateError) throw updateError;
-      }
-
-      toast.success("Successfully published to LinkedIn!");
     } catch (error: any) {
       console.error("Error publishing to LinkedIn:", error);
-      toast.error("Failed to publish to LinkedIn. Please try reconnecting your account.");
+      toast.error(error.message || "Failed to publish to LinkedIn. Please try reconnecting your account.");
     } finally {
       setIsPublishing(false);
     }
@@ -162,7 +138,6 @@ export default function PostDetail() {
       toast.success("Post deleted successfully");
       navigate("/posts");
       
-      // Invalidate relevant queries
       queryClient.invalidateQueries({ queryKey: ["posts"] });
     } catch (error: any) {
       console.error("Error deleting post:", error);
@@ -183,7 +158,10 @@ export default function PostDetail() {
     if (error) {
       console.error("Error updating post with image URL:", error);
       toast.error("Failed to save image URL to post");
+      return;
     }
+
+    queryClient.invalidateQueries({ queryKey: ["post", id] });
   };
 
   if (isLoading) {
@@ -267,11 +245,12 @@ export default function PostDetail() {
                 <Button
                   onClick={handlePublish}
                   disabled={isPublishing || !!post.linkedin_post_id}
+                  className="flex items-center gap-2"
                 >
                   {isPublishing ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
-                    <Share2 className="w-4 h-4 mr-2" />
+                    <Share2 className="w-4 h-4" />
                   )}
                   {post.linkedin_post_id ? "Published" : "Publish to LinkedIn"}
                 </Button>
@@ -287,7 +266,7 @@ export default function PostDetail() {
             className="min-h-[200px] mb-4"
           />
         ) : (
-          <div className="whitespace-pre-wrap">{post.content}</div>
+          <div className="whitespace-pre-wrap mb-6">{post.content}</div>
         )}
         
         {post.hashtags && post.hashtags.length > 0 && (
@@ -303,11 +282,13 @@ export default function PostDetail() {
           </div>
         )}
 
-        <PostImageGenerator
-          postId={post.id}
-          topic={post.topic}
-          onImageGenerated={handleImageGenerated}
-        />
+        {!post.linkedin_post_id && (
+          <PostImageGenerator
+            postId={post.id}
+            topic={post.topic}
+            onImageGenerated={handleImageGenerated}
+          />
+        )}
       </Card>
     </div>
   );
