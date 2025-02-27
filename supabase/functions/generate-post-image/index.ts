@@ -126,9 +126,9 @@ Deno.serve(async (req) => {
     const base64Image = responseData.artifacts[0].base64;
     const imageUrl = `data:image/png;base64,${base64Image}`;
 
-    console.log('Saving image to post_images table...');
+    console.log('Starting database operations...');
 
-    // Save to post_images table
+    // First, insert into post_images table
     const { error: insertError } = await supabase
       .from('post_images')
       .upsert({
@@ -140,8 +140,21 @@ Deno.serve(async (req) => {
       });
 
     if (insertError) {
-      console.error('Error saving image:', insertError);
-      throw new Error(`Failed to save image to database: ${insertError.message}`);
+      console.error('Error saving to post_images:', insertError);
+      throw new Error(`Failed to save to post_images: ${insertError.message}`);
+    }
+
+    // Then update the linkedin_posts table
+    const { error: updateError } = await supabase
+      .from('linkedin_posts')
+      .update({ image_url: imageUrl })
+      .eq('id', postId)
+      .eq('user_id', userId);
+
+    if (updateError) {
+      console.error('Error updating linkedin_posts:', updateError);
+      // Don't throw here since the image is already saved in post_images
+      console.log('Warning: Failed to update linkedin_posts but image was saved');
     }
 
     console.log('Successfully completed image generation process');
@@ -176,3 +189,4 @@ Deno.serve(async (req) => {
     );
   }
 });
+
