@@ -2,6 +2,7 @@
 import { createClient } from '@supabase/supabase-js';
 import OpenAI from 'openai';
 import { Database } from '../_shared/database.types.ts';
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -18,12 +19,13 @@ const supabase = createClient<Database>(supabaseUrl, supabaseServiceRoleKey);
 
 const stabilityApiKey = Deno.env.get('STABILITY_API_KEY');
 
-async function generateImagePrompt(content: string, topic: string | null): Promise<string> {
+async function generateImagePrompt(topic: string | null, postContent: string): Promise<string> {
   try {
-    const prompt = `Create a simple, professional LinkedIn post image prompt about: ${topic || 'professional content'}. The post content is: ${content?.substring(0, 100)}... Keep it under 200 characters and focus on business-appropriate imagery.`;
+    console.log('Generating image prompt for topic:', topic);
+    const prompt = `Create a simple, professional LinkedIn post image prompt about: ${topic || 'professional content'}. The post content is: ${postContent?.substring(0, 100)}... Keep it under 200 characters and focus on business-appropriate imagery.`;
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-3.5-turbo',
+      model: 'gpt-4o-mini',
       messages: [
         {
           role: 'system',
@@ -42,7 +44,7 @@ async function generateImagePrompt(content: string, topic: string | null): Promi
     return imagePrompt;
   } catch (error) {
     console.error('Error generating image prompt:', error);
-    return `Professional scene: ${topic || 'business meeting'}`;
+    throw new Error(`Failed to generate image prompt: ${error.message}`);
   }
 }
 
@@ -53,20 +55,41 @@ Deno.serve(async (req) => {
   }
 
   try {
+    console.log('Starting image generation process...');
+    
     if (!stabilityApiKey) {
       throw new Error('STABILITY_API_KEY is not configured');
     }
 
-    const { userId, postId, postContent, topic, customPrompt } = await req.json();
-    console.log('Received request:', { postId, topic, hasCustomPrompt: !!customPrompt });
+    // Parse request body
+    const body = await req.json();
+    const { postId, topic } = body;
+    
+    console.log('Received request for post:', { postId, topic });
 
-    if (!userId || !postId || !postContent) {
-      throw new Error('Missing required parameters');
+    if (!postId) {
+      throw new Error('postId is required');
     }
 
-    // Generate or use custom prompt
-    const imagePrompt = customPrompt || await generateImagePrompt(postContent, topic);
-    console.log('Final prompt:', imagePrompt);
+    // Fetch post content
+    const { data: post, error: postError } = await supabase
+      .from('linkedin_posts')
+      .select('content')
+      .eq('id', postId)
+      .single();
+
+    if (postError) {
+      console.error('Error fetching post:', postError);
+      throw new Error('Failed to fetch post content');
+    }
+
+    if (!post?.content) {
+      throw new Error('Post content is required');
+    }
+
+    // Generate image prompt
+    const imagePrompt = await generateImagePrompt(topic, post.content);
+    console.log('Using image prompt:', imagePrompt);
 
     // Request image generation from Stability AI
     console.log('Requesting image generation from Stability AI...');
@@ -108,25 +131,27 @@ Deno.serve(async (req) => {
     const base64Image = responseData.artifacts[0].base64;
     const imageUrl = `data:image/png;base64,${base64Image}`;
 
-    console.log('Successfully generated image, updating post...');
+    console.log('Saving image to post_images table...');
 
-    // Update post with image URL
-    const { error: updateError } = await supabase
-      .from('linkedin_posts')
-      .update({ image_url: imageUrl })
-      .eq('id', postId)
-      .eq('user_id', userId);
+    // Save to post_images table
+    const { error: insertError } = await supabase
+      .from('post_images')
+      .insert({
+        linkedin_post_id: postId,
+        image_url: imageUrl,
+        prompt: imagePrompt
+      });
 
-    if (updateError) {
-      console.error('Error updating post with image URL:', updateError);
-      throw updateError;
+    if (insertError) {
+      console.error('Error saving image:', insertError);
+      throw new Error('Failed to save image to database');
     }
 
     console.log('Successfully completed image generation process');
     return new Response(
       JSON.stringify({ 
         success: true, 
-        imageUrl, 
+        imageUrl,
         prompt: imagePrompt 
       }),
       { 
