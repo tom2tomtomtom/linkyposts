@@ -40,23 +40,34 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
 
     try {
       setIsGenerating(true);
+      console.log("Calling generate-post-image function with:", { postId, topic });
+      
       const { data, error } = await supabase.functions.invoke("generate-post-image", {
         body: {
           postId,
-          topic,
-          hasCustomPrompt: false
+          topic
         },
       });
 
-      if (error) throw error;
+      console.log("Function response:", { data, error });
 
-      if (data?.imageUrl) {
-        onImageGenerated?.(data.imageUrl);
-        toast.success("Image generated successfully!");
+      if (error) {
+        console.error("Function error:", error);
+        throw error;
       }
+
+      if (!data?.imageUrl) {
+        throw new Error("No image URL returned from function");
+      }
+
+      onImageGenerated?.(data.imageUrl);
+      toast.success("Image generated successfully!");
     } catch (error) {
       console.error("Error generating image:", error);
-      toast.error("Failed to generate image. Please try again.");
+      
+      // More descriptive error message
+      const errorMessage = error.message || "Unknown error occurred";
+      toast.error(`Failed to generate image: ${errorMessage}. Please try again.`);
     } finally {
       setIsGenerating(false);
     }
