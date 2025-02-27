@@ -16,21 +16,13 @@ serve(async (req) => {
   try {
     const { postId, userId, postContent, topic, customPrompt } = await req.json();
 
-    // Validate required parameters
-    if (!postContent) {
-      throw new Error('postContent is required');
-    }
-
-    if (!userId) {
-      throw new Error('userId is required');
-    }
-
-    if (!postId) {
-      throw new Error('postId is required');
+    // Basic validation
+    if (!postContent || !userId || !postId) {
+      throw new Error('Missing required parameters');
     }
 
     if (!stability_api_key) {
-      throw new Error('STABILITY_API_KEY is not configured');
+      throw new Error('Stability API key not configured');
     }
 
     // Initialize Supabase client
@@ -41,26 +33,7 @@ serve(async (req) => {
 
     // Use custom prompt if provided, otherwise generate one based on content
     const prompt = customPrompt?.trim() || generatePromptFromContent(postContent, topic);
-
     console.log('Using prompt:', prompt);
-    
-    // Prepare request body for Stability API
-    const requestBody = {
-      steps: 40,
-      width: 1024,
-      height: 576,
-      seed: 0,
-      cfg_scale: 7,
-      samples: 1,
-      text_prompts: [
-        {
-          text: prompt,
-          weight: 1
-        }
-      ],
-    };
-
-    console.log('Stability API request body:', JSON.stringify(requestBody));
 
     // Call Stability API
     const response = await fetch(
@@ -71,24 +44,30 @@ serve(async (req) => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${stability_api_key}`,
         },
-        body: JSON.stringify(requestBody),
+        body: JSON.stringify({
+          steps: 40,
+          width: 1024,
+          height: 576,
+          seed: 0,
+          cfg_scale: 7,
+          samples: 1,
+          text_prompts: [
+            {
+              text: prompt,
+              weight: 1
+            }
+          ],
+        }),
       }
     );
 
-    // Log the response status and any error message
-    console.log('Stability API response status:', response.status);
-    
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Stability API error response:', errorText);
-      throw new Error(`Stability API error (${response.status}): ${errorText}`);
+      throw new Error(`Stability API error: ${response.status}`);
     }
 
     const result = await response.json();
-    
     if (!result.artifacts?.[0]?.base64) {
-      console.error('Unexpected Stability API response format:', result);
-      throw new Error('Invalid response format from Stability API');
+      throw new Error('Invalid response from Stability API');
     }
 
     const base64Image = result.artifacts[0].base64;
@@ -108,7 +87,6 @@ serve(async (req) => {
       .single();
 
     if (imageError) {
-      console.error('Error storing image data:', imageError);
       throw imageError;
     }
 
@@ -122,7 +100,6 @@ serve(async (req) => {
       .eq('id', postId);
 
     if (updateError) {
-      console.error('Error updating post with image URL:', updateError);
       throw updateError;
     }
 
@@ -140,10 +117,7 @@ serve(async (req) => {
   } catch (error) {
     console.error('Error in generate-post-image function:', error);
     return new Response(
-      JSON.stringify({ 
-        error: error instanceof Error ? error.message : 'An unknown error occurred',
-        details: error instanceof Error ? error.stack : undefined
-      }),
+      JSON.stringify({ error: error.message }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 500,
@@ -157,7 +131,5 @@ function generatePromptFromContent(content: string, topic?: string): string {
   const topicPrompt = topic ? `The image should relate to ${topic}. ` : "";
   const contentPrompt = `The image should convey the essence of this message: ${content.substring(0, 200)}...`;
   
-  const fullPrompt = basePrompt + topicPrompt + contentPrompt;
-  // Ensure the prompt isn't too long for the API
-  return fullPrompt.substring(0, 1000);
+  return (basePrompt + topicPrompt + contentPrompt).substring(0, 1000);
 }
