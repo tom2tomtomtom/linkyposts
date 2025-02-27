@@ -15,8 +15,8 @@ export default function LinkedInLoginButton() {
     // Listen for auth state changes from the popup window
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_IN' && session) {
-        console.log('Auth state changed:', { event, session });
-        toast.success('Successfully signed in!');
+        console.log('LinkedIn auth state changed:', { event, session });
+        toast.success('Successfully connected with LinkedIn!');
         navigate('/dashboard');
       }
     });

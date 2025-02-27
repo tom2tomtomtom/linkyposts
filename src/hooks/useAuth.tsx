@@ -35,6 +35,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setUser(currentSession?.user ?? null);
       } catch (error) {
         console.error('Auth initialization error:', error);
+        toast.error('Authentication error occurred');
       } finally {
         setIsLoading(false);
       }
@@ -48,13 +49,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setSession(session);
         setUser(session?.user ?? null);
         setIsLoading(false);
+
+        if (_event === 'SIGNED_IN') {
+          toast.success('Successfully signed in!');
+          navigate('/dashboard');
+        }
       }
     );
 
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [navigate]);
 
   const signOut = async () => {
     if (!user?.id) {
@@ -70,6 +76,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (signOutError) throw signOutError;
 
       try {
+        // Delete LinkedIn tokens when signing out
         const { error: tokenError } = await supabase
           .from('linkedin_auth_tokens')
           .delete()
@@ -77,6 +84,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (tokenError) {
           console.error('Error clearing LinkedIn tokens:', tokenError);
+          toast.error('Error clearing LinkedIn connection');
         }
       } catch (tokenError) {
         console.error('Error during token cleanup:', tokenError);
@@ -85,8 +93,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(null);
       setUser(null);
       
-      navigate('/');
       toast.success('Successfully signed out');
+      navigate('/');
     } catch (error: any) {
       console.error('Sign out error:', error);
       toast.error('Error signing out: ' + error.message);
