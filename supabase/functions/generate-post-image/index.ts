@@ -21,7 +21,8 @@ const stabilityApiKey = Deno.env.get('STABILITY_API_KEY');
 
 async function generateImagePrompt(topic: string | null, postContent: string): Promise<string> {
   try {
-    console.log('Generating image prompt for topic:', topic);
+    console.log('Generating image prompt for:', { topic, postContent: postContent.substring(0, 100) });
+    
     const prompt = `Create a simple, professional LinkedIn post image prompt about: ${topic || 'professional content'}. The post content is: ${postContent?.substring(0, 100)}... Keep it under 200 characters and focus on business-appropriate imagery.`;
 
     const completion = await openai.chat.completions.create({
@@ -62,10 +63,8 @@ Deno.serve(async (req) => {
     }
 
     // Parse request body
-    const body = await req.json();
-    const { postId, topic } = body;
-    
-    console.log('Received request for post:', { postId, topic });
+    const { postId, topic } = await req.json();
+    console.log('Received request with:', { postId, topic });
 
     if (!postId) {
       throw new Error('postId is required');
@@ -80,11 +79,11 @@ Deno.serve(async (req) => {
 
     if (postError) {
       console.error('Error fetching post:', postError);
-      throw new Error('Failed to fetch post content');
+      throw new Error(`Failed to fetch post content: ${postError.message}`);
     }
 
     if (!post?.content) {
-      throw new Error('Post content is required');
+      throw new Error('Post content not found');
     }
 
     // Generate image prompt
@@ -116,7 +115,7 @@ Deno.serve(async (req) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Stability AI error response:', errorText);
+      console.error('Stability AI error:', { status: response.status, body: errorText });
       throw new Error(`Stability AI error: ${response.status} - ${errorText}`);
     }
 
@@ -136,15 +135,16 @@ Deno.serve(async (req) => {
     // Save to post_images table
     const { error: insertError } = await supabase
       .from('post_images')
-      .insert({
+      .upsert({
         linkedin_post_id: postId,
         image_url: imageUrl,
-        prompt: imagePrompt
+        prompt: imagePrompt,
+        storage_path: `post-images/${postId}.png`
       });
 
     if (insertError) {
       console.error('Error saving image:', insertError);
-      throw new Error('Failed to save image to database');
+      throw new Error(`Failed to save image to database: ${insertError.message}`);
     }
 
     console.log('Successfully completed image generation process');
