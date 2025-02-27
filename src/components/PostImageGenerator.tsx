@@ -2,11 +2,12 @@
 import React from 'react';
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { Image } from "lucide-react";
+import { Image, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Textarea } from "@/components/ui/textarea";
 
 interface PostImageGeneratorProps {
   postId: string;
@@ -17,6 +18,7 @@ interface PostImageGeneratorProps {
 export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImageGeneratorProps) {
   const { user } = useAuth();
   const [isGenerating, setIsGenerating] = React.useState(false);
+  const [imagePrompt, setImagePrompt] = React.useState('');
   const queryClient = useQueryClient();
 
   // Query both the post image and post content
@@ -59,8 +61,8 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
       return;
     }
 
-    if (!existingData?.postContent) {
-      toast.error("No post content found to generate image from");
+    if (!imagePrompt.trim()) {
+      toast.error("Please provide an image prompt");
       return;
     }
 
@@ -70,7 +72,7 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
         postId, 
         topic, 
         userId: user.id,
-        contentLength: existingData.postContent.length 
+        prompt: imagePrompt
       });
       
       const { data, error } = await supabase.functions.invoke("generate-post-image", {
@@ -78,7 +80,8 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
           postId,
           topic,
           userId: user.id,
-          postContent: existingData.postContent
+          postContent: existingData?.postContent,
+          customPrompt: imagePrompt
         },
       });
 
@@ -100,6 +103,7 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
       await queryClient.invalidateQueries({ queryKey: ["post_data", postId] });
 
       toast.success("Image generated successfully!");
+      setImagePrompt(''); // Clear the prompt after successful generation
     } catch (error: any) {
       console.error("Error generating image:", error);
       toast.error(`Failed to generate image: ${error.message}. Please try again.`);
@@ -113,33 +117,24 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
 
   return (
     <Card className="p-4 mt-4">
-      {imageUrl ? (
-        <div>
-          <img
-            src={imageUrl}
-            alt="Generated post image"
-            className="w-full rounded-md mb-2"
-          />
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={generateImage}
-            disabled={isGenerating}
-          >
-            {isGenerating ? (
-              <span className="flex items-center">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2" />
-                Regenerating...
-              </span>
-            ) : (
-              <span className="flex items-center">
-                <Image className="w-4 h-4 mr-2" />
-                Regenerate Image
-              </span>
-            )}
-          </Button>
-        </div>
-      ) : (
+      <div className="space-y-4">
+        <Textarea
+          placeholder="Enter a prompt for image generation..."
+          value={imagePrompt}
+          onChange={(e) => setImagePrompt(e.target.value)}
+          className="min-h-[100px]"
+        />
+
+        {imageUrl && (
+          <div className="space-y-4">
+            <img
+              src={imageUrl}
+              alt="Generated post image"
+              className="w-full rounded-md"
+            />
+          </div>
+        )}
+
         <Button
           variant="outline"
           className="w-full"
@@ -148,17 +143,17 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
         >
           {isGenerating ? (
             <span className="flex items-center">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2" />
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
               Generating...
             </span>
           ) : (
             <span className="flex items-center">
               <Image className="w-4 h-4 mr-2" />
-              Generate Image
+              {imageUrl ? 'Regenerate Image' : 'Generate Image'}
             </span>
           )}
         </Button>
-      )}
+      </div>
     </Card>
   );
 }
