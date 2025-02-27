@@ -14,10 +14,19 @@ export default function LinkedInLoginButton() {
   useEffect(() => {
     // Listen for auth state changes from the popup window
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('LinkedIn auth state changed:', { event, session });
+      
       if (event === 'SIGNED_IN' && session) {
-        console.log('LinkedIn auth state changed:', { event, session });
-        toast.success('Successfully connected with LinkedIn!');
-        navigate('/dashboard');
+        // Store additional LinkedIn metadata if available
+        const provider = session.user?.app_metadata?.provider;
+        if (provider === 'linkedin_oidc') {
+          toast.success('Successfully connected with LinkedIn!');
+          navigate('/dashboard');
+        }
+      } else if (event === 'TOKEN_REFRESHED') {
+        console.log('Token refreshed successfully');
+      } else if (event === 'SIGNED_OUT') {
+        navigate('/');
       }
     });
 
