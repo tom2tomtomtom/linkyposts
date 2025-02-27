@@ -116,21 +116,6 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
       // Call the callback with the new image URL
       onImageGenerated?.(data.imageUrl);
 
-      // Update the image URL in the database
-      const { error: updateError } = await supabase
-        .from("post_images")
-        .upsert({
-          linkedin_post_id: postId,
-          image_url: data.imageUrl,
-          custom_prompt: customPrompt.trim(),
-          user_id: user.id
-        });
-
-      if (updateError) {
-        console.error("Error updating post image:", updateError);
-        throw updateError;
-      }
-
       // Invalidate and refetch both queries immediately
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["post_data", postId] }),
@@ -228,4 +213,3 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
     </Card>
   );
 }
-

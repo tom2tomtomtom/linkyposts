@@ -1,11 +1,14 @@
 
-import { corsHeaders } from '../_shared/cors.ts';
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from '@supabase/supabase-js';
+import { corsHeaders } from '../_shared/cors.ts';
+
 const stability_api_key = Deno.env.get('STABILITY_API_KEY');
 
 serve(async (req) => {
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
@@ -94,6 +97,8 @@ serve(async (req) => {
 
     const base64Image = result.artifacts[0].base64;
     const imageUrl = `data:image/png;base64,${base64Image}`;
+    const storage_path = `post_images/${postId}`;
+    const prompt = finalPrompt;
 
     // Store the image data in the database
     const { error: imageError } = await supabase
@@ -102,7 +107,9 @@ serve(async (req) => {
         linkedin_post_id: postId,
         user_id: userId,
         image_url: imageUrl,
-        custom_prompt: customPrompt?.trim()
+        custom_prompt: customPrompt?.trim(),
+        prompt,
+        storage_path
       })
       .single();
 
@@ -154,4 +161,3 @@ function generatePromptFromContent(content: string, topic?: string) {
   
   return (basePrompt + topicPrompt + contentPrompt).substring(0, 1000);
 }
-
