@@ -10,6 +10,16 @@ import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { PostImageGenerator } from "@/components/PostImageGenerator";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export default function PostDetail() {
   const { id } = useParams();
@@ -20,6 +30,7 @@ export default function PostDetail() {
   const [isDeleting, setIsDeleting] = React.useState(false);
   const [isEditing, setIsEditing] = React.useState(false);
   const [editedContent, setEditedContent] = React.useState("");
+  const [showPublishConfirm, setShowPublishConfirm] = React.useState(false);
 
   const { data: post, isLoading } = useQuery({
     queryKey: ["post", id],
@@ -107,6 +118,7 @@ export default function PostDetail() {
       toast.error(error.message || "Failed to publish to LinkedIn. Please try reconnecting your account.");
     } finally {
       setIsPublishing(false);
+      setShowPublishConfirm(false);
     }
   };
 
@@ -243,7 +255,7 @@ export default function PostDetail() {
                   Delete
                 </Button>
                 <Button
-                  onClick={handlePublish}
+                  onClick={() => setShowPublishConfirm(true)}
                   disabled={isPublishing || !!post.linkedin_post_id}
                   className="flex items-center gap-2"
                 >
@@ -290,6 +302,26 @@ export default function PostDetail() {
           />
         )}
       </Card>
+
+      <AlertDialog open={showPublishConfirm} onOpenChange={setShowPublishConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Publish to LinkedIn</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to publish this post to LinkedIn? Please make sure your LinkedIn account is properly connected and authorized.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handlePublish}>
+              {isPublishing ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : null}
+              Publish
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
