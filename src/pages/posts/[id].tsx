@@ -1,10 +1,10 @@
 
 import React from "react";
-import { useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useParams, useNavigate } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Share2, Loader2 } from "lucide-react";
+import { Share2, Loader2, Copy, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -14,7 +14,10 @@ import { PostImageGenerator } from "@/components/PostImageGenerator";
 export default function PostDetail() {
   const { id } = useParams();
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [isPublishing, setIsPublishing] = React.useState(false);
+  const [isDeleting, setIsDeleting] = React.useState(false);
 
   const { data: post, isLoading } = useQuery({
     queryKey: ["post", id],
@@ -57,24 +60,20 @@ export default function PostDetail() {
     try {
       setIsPublishing(true);
       
-      // If not connected to LinkedIn, initiate LinkedIn OAuth flow
       if (!linkedinToken) {
         toast.info("Please connect your LinkedIn account first");
         await connectLinkedIn();
         return;
       }
 
-      // Check if the LinkedIn token is expired
       if (linkedinToken.expires_at && new Date(linkedinToken.expires_at) < new Date()) {
         toast.info("LinkedIn connection expired, please reconnect");
         await connectLinkedIn();
         return;
       }
 
-      // Publish to LinkedIn
       const result = await publishToLinkedIn(post.content, user.id);
       
-      // Update post with LinkedIn post ID
       if (result.postId) {
         const { error: updateError } = await supabase
           .from("linkedin_posts")
@@ -93,6 +92,44 @@ export default function PostDetail() {
       toast.error("Failed to publish to LinkedIn. Please try reconnecting your account.");
     } finally {
       setIsPublishing(false);
+    }
+  };
+
+  const handleCopyToClipboard = async () => {
+    if (!post?.content) return;
+    
+    try {
+      await navigator.clipboard.writeText(post.content);
+      toast.success("Post copied to clipboard");
+    } catch (error) {
+      toast.error("Failed to copy post");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!id || !user?.id) return;
+    
+    try {
+      setIsDeleting(true);
+      
+      const { error } = await supabase
+        .from("linkedin_posts")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", user.id);
+
+      if (error) throw error;
+
+      toast.success("Post deleted successfully");
+      navigate("/posts");
+      
+      // Invalidate relevant queries
+      queryClient.invalidateQueries({ queryKey: ["posts"] });
+    } catch (error: any) {
+      console.error("Error deleting post:", error);
+      toast.error("Failed to delete post");
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -138,17 +175,40 @@ export default function PostDetail() {
               <p className="text-blue-600 mb-4">{post.hook}</p>
             )}
           </div>
-          <Button
-            onClick={handlePublish}
-            disabled={isPublishing || !!post.linkedin_post_id}
-          >
-            {isPublishing ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <Share2 className="w-4 h-4 mr-2" />
-            )}
-            {post.linkedin_post_id ? "Published" : "Publish to LinkedIn"}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={handleCopyToClipboard}
+              className="flex items-center gap-2"
+            >
+              <Copy className="w-4 h-4" />
+              Copy
+            </Button>
+            <Button
+              variant="outline"
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="flex items-center gap-2 text-red-600 hover:bg-red-50"
+            >
+              {isDeleting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4" />
+              )}
+              Delete
+            </Button>
+            <Button
+              onClick={handlePublish}
+              disabled={isPublishing || !!post.linkedin_post_id}
+            >
+              {isPublishing ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Share2 className="w-4 h-4 mr-2" />
+              )}
+              {post.linkedin_post_id ? "Published" : "Publish to LinkedIn"}
+            </Button>
+          </div>
         </div>
         
         <div className="whitespace-pre-wrap">{post.content}</div>

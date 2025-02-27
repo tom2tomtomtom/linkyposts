@@ -1,4 +1,3 @@
-
 import React from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -30,6 +29,7 @@ export default function Posts() {
   const [searchParams] = useSearchParams();
   const filterFromUrl = searchParams.get("filter") as PostStatus | null;
   const [selectedStatus, setSelectedStatus] = React.useState<PostStatus>(filterFromUrl || "all");
+  const [isDeleting, setIsDeleting] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (filterFromUrl && filterFromUrl !== selectedStatus) {
@@ -84,11 +84,16 @@ export default function Posts() {
   };
 
   const handleDeletePost = async (postId: string) => {
+    if (!user?.id) return;
+    
     try {
+      setIsDeleting(postId);
+      
       const { error } = await supabase
         .from("linkedin_posts")
         .delete()
-        .eq("id", postId);
+        .eq("id", postId)
+        .eq("user_id", user.id);
 
       if (error) throw error;
 
@@ -97,6 +102,8 @@ export default function Posts() {
     } catch (error) {
       console.error("Delete error:", error);
       toast.error("Failed to delete post");
+    } finally {
+      setIsDeleting(null);
     }
   };
 
@@ -263,8 +270,13 @@ export default function Posts() {
                           variant="secondary"
                           size="sm"
                           onClick={() => handleDeletePost(post.id)}
+                          disabled={isDeleting === post.id}
                         >
-                          <Trash2 className="w-4 h-4" />
+                          {isDeleting === post.id ? (
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
                         </Button>
                       </div>
                     </div>
