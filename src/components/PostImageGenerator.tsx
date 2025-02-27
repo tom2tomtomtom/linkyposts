@@ -137,14 +137,16 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
   }
 
   return (
-    <Card className="p-4 mt-4">
+    <Card className="p-4 mt-4 max-w-md mx-auto">
       {imageUrl ? (
         <div>
-          <img
-            src={imageUrl}
-            alt="Generated post image"
-            className="w-full rounded-md mb-2"
-          />
+          <div className="aspect-video w-full overflow-hidden rounded-md mb-2">
+            <img
+              src={imageUrl}
+              alt="Generated post image"
+              className="w-full h-full object-cover"
+            />
+          </div>
           <Button
             variant="outline"
             className="w-full"
@@ -187,4 +189,3 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
     </Card>
   );
 }
-
