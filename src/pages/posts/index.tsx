@@ -244,7 +244,7 @@ export default function Posts() {
                           )}
                         </div>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 ml-4">
                         <Button
                           variant="secondary"
                           size="sm"
