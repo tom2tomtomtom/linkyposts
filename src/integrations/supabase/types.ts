@@ -88,6 +88,7 @@ export type Database = {
         Row: {
           content: string
           created_at: string | null
+          custom_prompt: string | null
           generated_content_id: string | null
           hashtags: string[] | null
           hook: string | null
@@ -106,6 +107,7 @@ export type Database = {
         Insert: {
           content: string
           created_at?: string | null
+          custom_prompt?: string | null
           generated_content_id?: string | null
           hashtags?: string[] | null
           hook?: string | null
@@ -124,6 +126,7 @@ export type Database = {
         Update: {
           content?: string
           created_at?: string | null
+          custom_prompt?: string | null
           generated_content_id?: string | null
           hashtags?: string[] | null
           hook?: string | null
@@ -229,6 +232,7 @@ export type Database = {
       post_images: {
         Row: {
           created_at: string | null
+          custom_prompt: string | null
           id: string
           image_url: string | null
           linkedin_post_id: string
@@ -238,6 +242,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          custom_prompt?: string | null
           id?: string
           image_url?: string | null
           linkedin_post_id: string
@@ -247,6 +252,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          custom_prompt?: string | null
           id?: string
           image_url?: string | null
           linkedin_post_id?: string

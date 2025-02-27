@@ -1,222 +1,134 @@
 
-import { createClient } from '@supabase/supabase-js';
-import OpenAI from 'openai';
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { corsHeaders } from '../_shared/cors.ts';
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-};
+const stability_api_key = Deno.env.get('STABILITY_API_KEY');
+const supabase_url = Deno.env.get('SUPABASE_URL');
+const supabase_service_role = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
-const stabilityApiKey = Deno.env.get('STABILITY_API_KEY');
-const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
-
-async function generateImagePrompt(topic: string | null, postContent: string): Promise<string> {
-  try {
-    console.log('Generating image prompt for:', { topic, postContent: postContent.substring(0, 100) });
-    
-    const prompt = `Create a simple, professional LinkedIn post image prompt about: ${topic || 'professional content'}. The post content is: ${postContent?.substring(0, 100)}... Keep it under 200 characters and focus on business-appropriate imagery.`;
-
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o-mini',
-      messages: [
-        { 
-          role: 'system', 
-          content: 'Create simple, clear image prompts for professional LinkedIn posts. Focus on business-appropriate imagery.'
-        },
-        { role: 'user', content: prompt }
-      ],
-      max_tokens: 100,
-      temperature: 0.5,
-    });
-
-    const imagePrompt = completion.choices[0]?.message?.content?.trim() || 
-      `Professional business visualization: ${topic || 'business meeting'}`;
-    
-    console.log('Generated image prompt:', imagePrompt);
-    return imagePrompt;
-  } catch (error) {
-    console.error('Error generating image prompt:', error);
-    throw new Error(`Failed to generate image prompt: ${error.message}`);
-  }
-}
-
-async function uploadImageToStorage(base64Image: string, filePath: string): Promise<string> {
-  try {
-    // Convert base64 to Uint8Array
-    const base64Data = base64Image.split(',')[1];
-    const binaryString = atob(base64Data);
-    const bytes = new Uint8Array(binaryString.length);
-    for (let i = 0; i < binaryString.length; i++) {
-      bytes[i] = binaryString.charCodeAt(i);
-    }
-
-    // Create storage bucket if it doesn't exist
-    const { data: bucketData, error: bucketError } = await supabase
-      .storage
-      .createBucket('post-images', { public: true });
-
-    if (bucketError && !bucketError.message.includes('already exists')) {
-      throw bucketError;
-    }
-
-    // Upload file to storage
-    const { data: uploadData, error: uploadError } = await supabase
-      .storage
-      .from('post-images')
-      .upload(filePath, bytes, {
-        contentType: 'image/png',
-        upsert: true
-      });
-
-    if (uploadError) throw uploadError;
-
-    // Get public URL
-    const { data: publicUrlData } = await supabase
-      .storage
-      .from('post-images')
-      .getPublicUrl(filePath);
-
-    if (!publicUrlData?.publicUrl) {
-      throw new Error('Failed to get public URL for uploaded image');
-    }
-
-    return publicUrlData.publicUrl;
-  } catch (error) {
-    console.error('Error uploading to storage:', error);
-    throw new Error(`Failed to upload image to storage: ${error.message}`);
-  }
-}
-
-Deno.serve(async (req) => {
+serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeaders });
   }
 
   try {
-    // Parse request body
-    const { postId, topic, userId, postContent } = await req.json();
-    console.log('Received request with:', { postId, topic, userId, postContent: postContent?.substring(0, 100) });
-
-    if (!postId || !userId) {
-      throw new Error('postId and userId are required');
-    }
+    const { postId, userId, postContent, topic, customPrompt } = await req.json();
 
     if (!postContent) {
       throw new Error('postContent is required');
     }
 
-    // Generate image prompt
-    const imagePrompt = await generateImagePrompt(topic, postContent);
-    console.log('Using image prompt:', imagePrompt);
-
-    // Request image generation from Stability AI
-    console.log('Requesting image generation from Stability AI...');
-    const response = await fetch('https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${stabilityApiKey}`,
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify({
-        text_prompts: [{ text: imagePrompt, weight: 1 }],
-        cfg_scale: 7,
-        height: 1024,
-        width: 1024,
-        samples: 1,
-        steps: 30,
-        style_preset: "photographic"
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Stability AI error:', { status: response.status, body: errorText });
-      throw new Error(`Stability AI error: ${response.status} - ${errorText}`);
+    if (!userId) {
+      throw new Error('userId is required');
     }
 
-    const responseData = await response.json();
-    console.log('Received response from Stability AI');
-
-    if (!responseData.artifacts?.[0]?.base64) {
-      console.error('Invalid response format from Stability AI:', responseData);
-      throw new Error('Invalid response format from Stability AI');
+    if (!postId) {
+      throw new Error('postId is required');
     }
 
-    const base64Image = responseData.artifacts[0].base64;
-    const storagePath = `${postId}.png`;
-    
-    // Upload image to storage and get public URL
-    console.log('Uploading image to storage...');
-    const imageUrl = await uploadImageToStorage(
-      `data:image/png;base64,${base64Image}`, 
-      storagePath
+    // Initialize Supabase client
+    const supabase = createClient(
+      supabase_url!,
+      supabase_service_role!
     );
 
-    console.log('Image uploaded successfully, saving to database...');
+    // Use custom prompt if provided, otherwise generate one based on content
+    const prompt = customPrompt?.trim() || generatePromptFromContent(postContent, topic);
 
-    // Save to post_images table
-    const { error: insertError } = await supabase
+    console.log('Using prompt:', prompt);
+
+    // Call Stability API
+    const response = await fetch(
+      "https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image",
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${stability_api_key}`,
+        },
+        body: JSON.stringify({
+          steps: 40,
+          width: 1024,
+          height: 576,
+          seed: 0,
+          cfg_scale: 7,
+          samples: 1,
+          text_prompts: [
+            {
+              "text": prompt,
+              "weight": 1
+            }
+          ],
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Stability API error: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    const base64Image = result.artifacts[0].base64;
+    
+    // Store image in post_images table
+    const { data: imageData, error: imageError } = await supabase
       .from('post_images')
       .insert({
         linkedin_post_id: postId,
-        image_url: imageUrl,
-        prompt: imagePrompt,
         user_id: userId,
-        storage_path: `post-images/${storagePath}`
-      });
+        prompt: prompt,
+        custom_prompt: customPrompt || null,
+        image_url: `data:image/png;base64,${base64Image}`,
+        storage_path: `posts/${postId}/image.png`
+      })
+      .select()
+      .single();
 
-    if (insertError) {
-      console.error('Error saving to post_images:', insertError);
-      throw new Error(`Failed to save to post_images: ${insertError.message}`);
+    if (imageError) {
+      throw imageError;
     }
 
-    // Update linkedin_posts table
+    // Update the linkedin_posts table with the image URL
     const { error: updateError } = await supabase
       .from('linkedin_posts')
-      .update({ image_url: imageUrl })
-      .eq('id', postId)
-      .eq('user_id', userId);
+      .update({ 
+        image_url: imageData.image_url,
+        custom_prompt: customPrompt || null
+      })
+      .eq('id', postId);
 
     if (updateError) {
-      console.error('Error updating linkedin_posts:', updateError);
-      console.log('Warning: Failed to update linkedin_posts but image was saved');
+      throw updateError;
     }
 
-    console.log('Successfully completed image generation process');
     return new Response(
       JSON.stringify({ 
-        success: true, 
-        imageUrl,
-        prompt: imagePrompt 
+        imageUrl: imageData.image_url,
+        prompt: prompt
       }),
-      { 
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'application/json' 
-        } 
-      }
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200,
+      },
     );
 
   } catch (error) {
     console.error('Error in generate-post-image function:', error);
     return new Response(
-      JSON.stringify({ 
-        error: error.message || 'An unexpected error occurred',
-        details: error.toString()
-      }),
-      { 
-        status: 500, 
-        headers: { 
-          ...corsHeaders, 
-          'Content-Type': 'application/json' 
-        } 
-      }
+      JSON.stringify({ error: error.message }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 500,
+      },
     );
   }
 });
 
+function generatePromptFromContent(content: string, topic?: string): string {
+  const basePrompt = "Create a professional LinkedIn post image that is modern, clean, and business-appropriate. ";
+  const topicPrompt = topic ? `The image should relate to ${topic}. ` : "";
+  const contentPrompt = `The image should convey the essence of this message: ${content.substring(0, 200)}...`;
+  
+  return basePrompt + topicPrompt + contentPrompt;
+}

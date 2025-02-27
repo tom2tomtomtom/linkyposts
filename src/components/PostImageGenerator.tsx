@@ -7,6 +7,8 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface PostImageGeneratorProps {
   postId: string;
@@ -17,6 +19,7 @@ interface PostImageGeneratorProps {
 export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImageGeneratorProps) {
   const { user } = useAuth();
   const [isGenerating, setIsGenerating] = React.useState(false);
+  const [customPrompt, setCustomPrompt] = React.useState("");
   const queryClient = useQueryClient();
 
   // Query both the post image and post content
@@ -28,13 +31,13 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
       const [imageResult, postResult] = await Promise.all([
         supabase
           .from("post_images")
-          .select("*")
+          .select("*, custom_prompt")
           .eq("linkedin_post_id", postId)
           .maybeSingle(),
           
         supabase
           .from("linkedin_posts")
-          .select("content, image_url")
+          .select("content, image_url, custom_prompt")
           .eq("id", postId)
           .single()
       ]);
@@ -42,6 +45,11 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
       if (postResult.error) {
         console.error("Error fetching post:", postResult.error);
         return null;
+      }
+
+      // Set the custom prompt from existing data if available
+      if (imageResult.data?.custom_prompt || postResult.data?.custom_prompt) {
+        setCustomPrompt(imageResult.data?.custom_prompt || postResult.data?.custom_prompt || "");
       }
 
       return {
@@ -86,7 +94,8 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
           postId,
           topic,
           userId: user.id,
-          postContent: postData.content
+          postContent: postData.content,
+          customPrompt: customPrompt.trim()
         },
       });
 
@@ -136,15 +145,46 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
 
   return (
     <Card className="p-4 mt-4 max-w-md mx-auto">
-      {imageUrl ? (
-        <div>
-          <div className="aspect-video w-full overflow-hidden rounded-md mb-2">
-            <img
-              src={`${imageUrl}?${Date.now()}`} // Add cache-busting timestamp
-              alt="Generated post image"
-              className="w-full h-full object-cover"
-            />
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="customPrompt">Custom Prompt (Optional)</Label>
+          <Input
+            id="customPrompt"
+            placeholder="Enter a custom prompt for image generation..."
+            value={customPrompt}
+            onChange={(e) => setCustomPrompt(e.target.value)}
+          />
+        </div>
+        
+        {imageUrl ? (
+          <div>
+            <div className="aspect-video w-full overflow-hidden rounded-md mb-2">
+              <img
+                src={`${imageUrl}?${Date.now()}`}
+                alt="Generated post image"
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={generateImage}
+              disabled={isGenerating}
+            >
+              {isGenerating ? (
+                <span className="flex items-center">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2" />
+                  Regenerating...
+                </span>
+              ) : (
+                <span className="flex items-center">
+                  <Image className="w-4 h-4 mr-2" />
+                  Regenerate Image
+                </span>
+              )}
+            </Button>
           </div>
+        ) : (
           <Button
             variant="outline"
             className="w-full"
@@ -154,36 +194,17 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
             {isGenerating ? (
               <span className="flex items-center">
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2" />
-                Regenerating...
+                Generating...
               </span>
             ) : (
               <span className="flex items-center">
                 <Image className="w-4 h-4 mr-2" />
-                Regenerate Image
+                Generate Image
               </span>
             )}
           </Button>
-        </div>
-      ) : (
-        <Button
-          variant="outline"
-          className="w-full"
-          onClick={generateImage}
-          disabled={isGenerating}
-        >
-          {isGenerating ? (
-            <span className="flex items-center">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2" />
-              Generating...
-            </span>
-          ) : (
-            <span className="flex items-center">
-              <Image className="w-4 h-4 mr-2" />
-              Generate Image
-            </span>
-          )}
-        </Button>
-      )}
+        )}
+      </div>
     </Card>
   );
 }
