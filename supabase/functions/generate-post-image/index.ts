@@ -9,7 +9,6 @@ const corsHeaders = {
 };
 
 const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
-const stabilityApiKey = Deno.env.get('STABILITY_API_KEY');
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
@@ -21,7 +20,7 @@ async function generateImagePrompt(topic: string | null, postContent: string): P
     const prompt = `Create a simple, professional LinkedIn post image prompt about: ${topic || 'professional content'}. The post content is: ${postContent?.substring(0, 100)}... Keep it under 200 characters and focus on business-appropriate imagery.`;
 
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4',
+      model: 'gpt-4o-mini',
       messages: [
         { 
           role: 'system', 
@@ -113,41 +112,22 @@ Deno.serve(async (req) => {
     const imagePrompt = await generateImagePrompt(topic, postContent);
     console.log('Using image prompt:', imagePrompt);
 
-    // Request image generation from Stability AI
-    console.log('Requesting image generation from Stability AI...');
-    const response = await fetch('https://api.stability.ai/v1/generation/stable-diffusion-xl-1024-v1-0/text-to-image', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${stabilityApiKey}`,
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify({
-        text_prompts: [{ text: imagePrompt, weight: 1 }],
-        cfg_scale: 7,
-        height: 1024,
-        width: 1024,
-        samples: 1,
-        steps: 30,
-        style_preset: "photographic"
-      }),
+    // Generate image with DALL-E 3
+    console.log('Requesting image generation from DALL-E 3...');
+    const response = await openai.images.generate({
+      model: "dall-e-3",
+      prompt: imagePrompt,
+      n: 1,
+      size: "1024x1024",
+      quality: "standard",
+      response_format: "b64_json"
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Stability AI error:', { status: response.status, body: errorText });
-      throw new Error(`Stability AI error: ${response.status} - ${errorText}`);
+    if (!response.data[0]?.b64_json) {
+      throw new Error('No image data received from DALL-E');
     }
 
-    const responseData = await response.json();
-    console.log('Received response from Stability AI');
-
-    if (!responseData.artifacts?.[0]?.base64) {
-      console.error('Invalid response format from Stability AI:', responseData);
-      throw new Error('Invalid response format from Stability AI');
-    }
-
-    const base64Image = responseData.artifacts[0].base64;
+    const base64Image = response.data[0].b64_json;
     const storagePath = `${postId}.png`;
     
     // Upload image to storage and get public URL
@@ -219,3 +199,4 @@ Deno.serve(async (req) => {
     );
   }
 });
+

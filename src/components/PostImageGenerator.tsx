@@ -51,8 +51,8 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
       };
     },
     enabled: !!user?.id && !!postId,
-    staleTime: 0, // Always fetch fresh data
-    cacheTime: 0  // Don't cache the data
+    gcTime: 0,  // Updated from cacheTime
+    staleTime: 0
   });
 
   const generateImage = async () => {
