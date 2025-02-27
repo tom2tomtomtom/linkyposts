@@ -39,8 +39,6 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
           .single()
       ]);
 
-      console.log("Query results:", { imageResult, postResult });
-
       if (postResult.error) {
         console.error("Error fetching post:", postResult.error);
         return null;
@@ -53,6 +51,8 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
       };
     },
     enabled: !!user?.id && !!postId,
+    staleTime: 0, // Always fetch fresh data
+    cacheTime: 0  // Don't cache the data
   });
 
   const generateImage = async () => {
@@ -66,38 +66,29 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
       return;
     }
 
-    if (!existingData?.postContent) {
-      const { data: postData, error: postError } = await supabase
-        .from("linkedin_posts")
-        .select("content")
-        .eq("id", postId)
-        .single();
+    // Get the latest post content directly from the database
+    const { data: postData, error: postError } = await supabase
+      .from("linkedin_posts")
+      .select("content")
+      .eq("id", postId)
+      .single();
 
-      if (postError || !postData?.content) {
-        toast.error("No post content found to generate image from");
-        return;
-      }
+    if (postError || !postData?.content) {
+      toast.error("No post content found to generate image from");
+      return;
     }
 
     try {
       setIsGenerating(true);
-      console.log("Calling generate-post-image function with:", { 
-        postId, 
-        topic, 
-        userId: user.id,
-        contentLength: existingData?.postContent?.length 
-      });
       
       const { data, error } = await supabase.functions.invoke("generate-post-image", {
         body: {
           postId,
           topic,
           userId: user.id,
-          postContent: existingData?.postContent
+          postContent: postData.content
         },
       });
-
-      console.log("Function response:", { data, error });
 
       if (error) {
         console.error("Function error:", error);
@@ -111,8 +102,11 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
       // Call the callback with the new image URL
       onImageGenerated?.(data.imageUrl);
 
-      // Invalidate the query to refresh the UI
-      await queryClient.invalidateQueries({ queryKey: ["post_data", postId] });
+      // Invalidate both the post data and specific post queries
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["post_data", postId] }),
+        queryClient.invalidateQueries({ queryKey: ["post", postId] })
+      ]);
 
       toast.success("Image generated successfully!");
     } catch (error: any) {
@@ -145,6 +139,7 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
               src={imageUrl}
               alt="Generated post image"
               className="w-full h-full object-cover"
+              key={imageUrl} // Add key prop to force re-render when URL changes
             />
           </div>
           <Button
