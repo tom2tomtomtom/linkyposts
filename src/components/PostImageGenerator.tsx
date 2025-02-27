@@ -18,19 +18,33 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
   const { user } = useAuth();
   const [isGenerating, setIsGenerating] = React.useState(false);
 
-  const { data: existingImage } = useQuery({
-    queryKey: ["post_image", postId],
+  // Query both the post image and post content
+  const { data: existingData } = useQuery({
+    queryKey: ["post_data", postId],
     queryFn: async () => {
       if (!user?.id) return null;
       
-      const { data, error } = await supabase
-        .from("post_images")
-        .select("*")
-        .eq("linkedin_post_id", postId)
-        .maybeSingle();
+      const [imageResult, postResult] = await Promise.all([
+        supabase
+          .from("post_images")
+          .select("*")
+          .eq("linkedin_post_id", postId)
+          .maybeSingle(),
+          
+        supabase
+          .from("linkedin_posts")
+          .select("content")
+          .eq("id", postId)
+          .single()
+      ]);
 
-      if (error) throw error;
-      return data;
+      if (imageResult.error) throw imageResult.error;
+      if (postResult.error) throw postResult.error;
+
+      return {
+        existingImage: imageResult.data,
+        postContent: postResult.data?.content
+      };
     },
     enabled: !!user?.id && !!postId,
   });
@@ -41,15 +55,26 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
       return;
     }
 
+    if (!existingData?.postContent) {
+      toast.error("No post content found to generate image from");
+      return;
+    }
+
     try {
       setIsGenerating(true);
-      console.log("Calling generate-post-image function with:", { postId, topic, userId: user.id });
+      console.log("Calling generate-post-image function with:", { 
+        postId, 
+        topic, 
+        userId: user.id,
+        contentLength: existingData.postContent.length 
+      });
       
       const { data, error } = await supabase.functions.invoke("generate-post-image", {
         body: {
           postId,
           topic,
-          userId: user.id // Make sure this is properly sent
+          userId: user.id,
+          postContent: existingData.postContent
         },
       });
 
@@ -76,10 +101,10 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
 
   return (
     <Card className="p-4 mt-4">
-      {existingImage?.image_url ? (
+      {existingData?.existingImage?.image_url ? (
         <div>
           <img
-            src={existingImage.image_url}
+            src={existingData.existingImage.image_url}
             alt="Generated post image"
             className="w-full rounded-md mb-2"
           />
