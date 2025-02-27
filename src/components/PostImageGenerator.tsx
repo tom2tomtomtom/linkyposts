@@ -66,13 +66,19 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
       return;
     }
 
+    if (!existingData?.postContent) {
+      toast.error("No post content found to generate image from");
+      return;
+    }
+
     try {
       setIsGenerating(true);
       console.log("Calling generate-post-image function with:", { 
         postId, 
         topic, 
         userId: user.id,
-        prompt: imagePrompt
+        postContent: existingData.postContent,
+        customPrompt: imagePrompt
       });
       
       const { data, error } = await supabase.functions.invoke("generate-post-image", {
@@ -80,7 +86,7 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
           postId,
           topic,
           userId: user.id,
-          postContent: existingData?.postContent,
+          postContent: existingData.postContent,
           customPrompt: imagePrompt
         },
       });
@@ -139,7 +145,7 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
           variant="outline"
           className="w-full"
           onClick={generateImage}
-          disabled={isGenerating}
+          disabled={isGenerating || !existingData?.postContent}
         >
           {isGenerating ? (
             <span className="flex items-center">
