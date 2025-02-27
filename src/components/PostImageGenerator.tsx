@@ -20,7 +20,7 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
   const queryClient = useQueryClient();
 
   // Query both the post image and post content
-  const { data: existingData } = useQuery({
+  const { data: existingData, isLoading } = useQuery({
     queryKey: ["post_data", postId],
     queryFn: async () => {
       if (!user?.id) return null;
@@ -41,8 +41,10 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
 
       console.log("Query results:", { imageResult, postResult });
 
-      if (imageResult.error) throw imageResult.error;
-      if (postResult.error) throw postResult.error;
+      if (postResult.error) {
+        console.error("Error fetching post:", postResult.error);
+        return null;
+      }
 
       return {
         existingImage: imageResult.data,
@@ -59,9 +61,22 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
       return;
     }
 
-    if (!existingData?.postContent) {
-      toast.error("No post content found to generate image from");
+    if (!postId) {
+      toast.error("No post ID provided");
       return;
+    }
+
+    if (!existingData?.postContent) {
+      const { data: postData, error: postError } = await supabase
+        .from("linkedin_posts")
+        .select("content")
+        .eq("id", postId)
+        .single();
+
+      if (postError || !postData?.content) {
+        toast.error("No post content found to generate image from");
+        return;
+      }
     }
 
     try {
@@ -70,7 +85,7 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
         postId, 
         topic, 
         userId: user.id,
-        contentLength: existingData.postContent.length 
+        contentLength: existingData?.postContent?.length 
       });
       
       const { data, error } = await supabase.functions.invoke("generate-post-image", {
@@ -78,7 +93,7 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
           postId,
           topic,
           userId: user.id,
-          postContent: existingData.postContent
+          postContent: existingData?.postContent
         },
       });
 
@@ -110,6 +125,16 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
 
   // Get the image URL either from the post_images table or directly from the linkedin_posts table
   const imageUrl = existingData?.postImageUrl || existingData?.existingImage?.image_url;
+
+  if (isLoading) {
+    return (
+      <Card className="p-4 mt-4">
+        <div className="flex items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+        </div>
+      </Card>
+    );
+  }
 
   return (
     <Card className="p-4 mt-4">
@@ -162,3 +187,4 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
     </Card>
   );
 }
+
