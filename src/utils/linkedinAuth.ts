@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 export async function connectLinkedIn() {
@@ -11,11 +10,10 @@ export async function connectLinkedIn() {
     provider: 'linkedin_oidc',
     options: {
       redirectTo: `${window.location.origin}/auth/callback`,
-      scopes: 'openid profile email w_member_social r_liteprofile w_member_social r_emailaddress', // Added required scopes
+      scopes: 'openid profile email w_member_social',
       queryParams: {
         prompt: 'consent',
-        access_type: 'offline',
-        response_type: 'code',
+        access_type: 'offline'
       },
       skipBrowserRedirect: true
     }
@@ -137,4 +135,3 @@ export async function publishToLinkedIn(postContent: string, userId: string) {
     throw error;
   }
 }
-
