@@ -43,13 +43,13 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
 
     try {
       setIsGenerating(true);
-      console.log("Calling generate-post-image function with:", { postId, topic });
+      console.log("Calling generate-post-image function with:", { postId, topic, userId: user.id });
       
       const { data, error } = await supabase.functions.invoke("generate-post-image", {
         body: {
           postId,
           topic,
-          userId: user.id // Add user ID to the request
+          userId: user.id // Make sure this is properly sent
         },
       });
 
