@@ -230,7 +230,7 @@ export type Database = {
         Row: {
           created_at: string | null
           id: string
-          image_url: string
+          image_url: string | null
           linkedin_post_id: string
           prompt: string
           storage_path: string
@@ -239,7 +239,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           id?: string
-          image_url: string
+          image_url?: string | null
           linkedin_post_id: string
           prompt: string
           storage_path: string
@@ -248,7 +248,7 @@ export type Database = {
         Update: {
           created_at?: string | null
           id?: string
-          image_url?: string
+          image_url?: string | null
           linkedin_post_id?: string
           prompt?: string
           storage_path?: string
