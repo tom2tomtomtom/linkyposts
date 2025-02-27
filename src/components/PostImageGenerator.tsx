@@ -51,8 +51,8 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
       };
     },
     enabled: !!user?.id && !!postId,
-    gcTime: 0,  // Updated from cacheTime
-    staleTime: 0
+    staleTime: 0,
+    gcTime: 0
   });
 
   const generateImage = async () => {
@@ -102,11 +102,15 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
       // Call the callback with the new image URL
       onImageGenerated?.(data.imageUrl);
 
-      // Invalidate both the post data and specific post queries
+      // Invalidate and refetch both queries immediately
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["post_data", postId] }),
         queryClient.invalidateQueries({ queryKey: ["post", postId] })
       ]);
+
+      // Force refetch the data
+      await queryClient.refetchQueries({ queryKey: ["post_data", postId] });
+      await queryClient.refetchQueries({ queryKey: ["post", postId] });
 
       toast.success("Image generated successfully!");
     } catch (error: any) {
@@ -136,10 +140,9 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
         <div>
           <div className="aspect-video w-full overflow-hidden rounded-md mb-2">
             <img
-              src={imageUrl}
+              src={`${imageUrl}?${Date.now()}`} // Add cache-busting timestamp
               alt="Generated post image"
               className="w-full h-full object-cover"
-              key={imageUrl} // Add key prop to force re-render when URL changes
             />
           </div>
           <Button
