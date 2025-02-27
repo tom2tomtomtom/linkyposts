@@ -9,6 +9,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
 import { connectLinkedIn, publishToLinkedIn } from "@/utils/linkedinAuth";
+import { PostImageGenerator } from "@/components/PostImageGenerator";
 
 export default function PostDetail() {
   const { id } = useParams();
@@ -95,6 +96,20 @@ export default function PostDetail() {
     }
   };
 
+  const handleImageGenerated = async (imageUrl: string) => {
+    if (!id) return;
+    
+    const { error } = await supabase
+      .from("linkedin_posts")
+      .update({ image_url: imageUrl })
+      .eq("id", id);
+
+    if (error) {
+      console.error("Error updating post with image URL:", error);
+      toast.error("Failed to save image URL to post");
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -150,6 +165,12 @@ export default function PostDetail() {
             ))}
           </div>
         )}
+
+        <PostImageGenerator
+          postId={post.id}
+          topic={post.topic}
+          onImageGenerated={handleImageGenerated}
+        />
       </Card>
     </div>
   );
