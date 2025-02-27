@@ -14,7 +14,8 @@ export default function Callback() {
         console.log('Auth callback triggered', {
           fullUrl: window.location.href,
           search: window.location.search,
-          hash: window.location.hash
+          hash: window.location.hash,
+          hostname: window.location.hostname
         });
         
         // Get error from URL if present
@@ -33,7 +34,8 @@ export default function Callback() {
           error,
           userId: session?.user?.id,
           accessToken: !!session?.access_token,
-          provider: session?.user?.app_metadata?.provider
+          provider: session?.user?.app_metadata?.provider,
+          hostname: window.location.hostname
         });
         
         if (error) {
@@ -46,10 +48,16 @@ export default function Callback() {
           throw new Error('No session found');
         }
         
-        // Log successful authentication
-        console.log('Authentication successful, redirecting to dashboard');
-        toast.success('Successfully signed in!');
-        navigate('/dashboard');
+        // Close popup window if we're in one
+        if (window.opener) {
+          window.opener.postMessage({ type: 'LINKEDIN_AUTH_SUCCESS' }, '*');
+          window.close();
+        } else {
+          // Log successful authentication
+          console.log('Authentication successful, redirecting to dashboard');
+          toast.success('Successfully signed in!');
+          navigate('/dashboard');
+        }
       } catch (error: any) {
         console.error('Auth callback error:', error);
         toast.error(error.message || 'Authentication failed');
