@@ -18,6 +18,7 @@ type Post = {
   created_at: string;
   published_at: string | null;
   scheduled_for: string | null;
+  image_url?: string | null;
 };
 
 type PostStatus = "all" | "draft" | "scheduled" | "published";
@@ -70,7 +71,7 @@ export default function Posts() {
     enabled: !!user,
     refetchOnMount: true,
     refetchOnWindowFocus: true,
-    staleTime: 0 // Consider data stale immediately
+    staleTime: 0
   });
 
   const handleCopyToClipboard = async (content: string) => {
@@ -212,6 +213,13 @@ export default function Posts() {
                           <p className="font-medium text-lg mb-2 text-blue-600">{post.hook}</p>
                         )}
                         <p className="line-clamp-3 mb-2">{post.content}</p>
+                        {post.image_url && (
+                          <img
+                            src={post.image_url}
+                            alt="Post image"
+                            className="w-full max-h-48 object-cover rounded-md mb-4"
+                          />
+                        )}
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className={`flex items-center gap-1 ${getStatusColor(status)}`}>
                             {getStatusIcon(status)}
