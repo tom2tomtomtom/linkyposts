@@ -21,6 +21,8 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
   const { data: existingImage } = useQuery({
     queryKey: ["post_image", postId],
     queryFn: async () => {
+      if (!user?.id) return null;
+      
       const { data, error } = await supabase
         .from("post_images")
         .select("*")
@@ -30,6 +32,7 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
       if (error) throw error;
       return data;
     },
+    enabled: !!user?.id && !!postId,
   });
 
   const generateImage = async () => {
@@ -45,7 +48,8 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
       const { data, error } = await supabase.functions.invoke("generate-post-image", {
         body: {
           postId,
-          topic
+          topic,
+          userId: user.id // Add user ID to the request
         },
       });
 
@@ -62,12 +66,9 @@ export function PostImageGenerator({ postId, topic, onImageGenerated }: PostImag
 
       onImageGenerated?.(data.imageUrl);
       toast.success("Image generated successfully!");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error generating image:", error);
-      
-      // More descriptive error message
-      const errorMessage = error.message || "Unknown error occurred";
-      toast.error(`Failed to generate image: ${errorMessage}. Please try again.`);
+      toast.error(`Failed to generate image: ${error.message}. Please try again.`);
     } finally {
       setIsGenerating(false);
     }

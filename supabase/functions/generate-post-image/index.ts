@@ -9,15 +9,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Initialize OpenAI (for generating image prompts)
 const openai = new OpenAI({ apiKey: Deno.env.get('OPENAI_API_KEY') });
+const stabilityApiKey = Deno.env.get('STABILITY_API_KEY');
 
-// Initialize Supabase Admin Client
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const supabase = createClient<Database>(supabaseUrl, supabaseServiceRoleKey);
-
-const stabilityApiKey = Deno.env.get('STABILITY_API_KEY');
 
 async function generateImagePrompt(topic: string | null, postContent: string): Promise<string> {
   try {
@@ -28,8 +25,8 @@ async function generateImagePrompt(topic: string | null, postContent: string): P
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
-        {
-          role: 'system',
+        { 
+          role: 'system', 
           content: 'Create simple, clear image prompts for professional LinkedIn posts. Focus on business-appropriate imagery.'
         },
         { role: 'user', content: prompt }
@@ -50,24 +47,25 @@ async function generateImagePrompt(topic: string | null, postContent: string): P
 }
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    console.log('Starting image generation process...');
-    
     if (!stabilityApiKey) {
       throw new Error('STABILITY_API_KEY is not configured');
     }
 
     // Parse request body
-    const { postId, topic } = await req.json();
-    console.log('Received request with:', { postId, topic });
+    const { postId, topic, userId } = await req.json();
+    console.log('Received request with:', { postId, topic, userId });
 
     if (!postId) {
       throw new Error('postId is required');
+    }
+
+    if (!userId) {
+      throw new Error('userId is required');
     }
 
     // Fetch post content
@@ -75,6 +73,7 @@ Deno.serve(async (req) => {
       .from('linkedin_posts')
       .select('content')
       .eq('id', postId)
+      .eq('user_id', userId)
       .single();
 
     if (postError) {
@@ -100,10 +99,7 @@ Deno.serve(async (req) => {
         'Accept': 'application/json',
       },
       body: JSON.stringify({
-        text_prompts: [{ 
-          text: imagePrompt,
-          weight: 1
-        }],
+        text_prompts: [{ text: imagePrompt, weight: 1 }],
         cfg_scale: 7,
         height: 1024,
         width: 1024,
@@ -139,6 +135,7 @@ Deno.serve(async (req) => {
         linkedin_post_id: postId,
         image_url: imageUrl,
         prompt: imagePrompt,
+        user_id: userId,
         storage_path: `post-images/${postId}.png`
       });
 
