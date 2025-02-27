@@ -11,7 +11,7 @@ export async function connectLinkedIn() {
     provider: 'linkedin_oidc',
     options: {
       redirectTo: `${window.location.origin}/auth/callback`,
-      scopes: 'openid profile email w_member_social', // Added w_member_social scope for posting
+      scopes: 'openid profile email w_member_social r_liteprofile w_member_social r_emailaddress', // Added required scopes
       queryParams: {
         prompt: 'consent',
         access_type: 'offline',
@@ -46,18 +46,37 @@ export async function connectLinkedIn() {
 
 export async function refreshLinkedInToken(userId: string) {
   try {
-    const { data: existingToken, error: fetchError } = await supabase
+    if (!userId) {
+      throw new Error('User ID is required to refresh token');
+    }
+
+    // First, verify if we have LinkedIn tokens for this user
+    const { data: linkedInTokens, error: fetchError } = await supabase
       .from('linkedin_auth_tokens')
-      .select('refresh_token')
+      .select('*')
       .eq('user_id', userId)
       .single();
 
-    if (fetchError || !existingToken?.refresh_token) {
-      throw new Error('No refresh token found');
+    if (fetchError || !linkedInTokens) {
+      console.log('No LinkedIn tokens found, initiating new connection');
+      throw new Error('No LinkedIn connection found');
     }
 
-    // The token refresh will be handled by Supabase automatically
-    // This is just to check if we have a valid refresh token
+    // Get the current session to check if we need to refresh
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      console.error('Session error:', sessionError);
+      throw new Error('Authentication session not found');
+    }
+
+    // Check if the session needs refresh
+    const provider = session.user?.app_metadata?.provider;
+    if (provider !== 'linkedin_oidc') {
+      throw new Error('User is not authenticated with LinkedIn');
+    }
+
+    // Return true if we have valid tokens
     return true;
   } catch (error) {
     console.error('Error refreshing LinkedIn token:', error);
@@ -65,19 +84,57 @@ export async function refreshLinkedInToken(userId: string) {
   }
 }
 
+export async function disconnectLinkedIn(userId: string) {
+  if (!userId) return;
+  
+  try {
+    // Remove LinkedIn tokens
+    const { error } = await supabase
+      .from('linkedin_auth_tokens')
+      .delete()
+      .eq('user_id', userId);
+
+    if (error) throw error;
+    
+    // Sign out from Supabase/LinkedIn
+    await supabase.auth.signOut();
+    
+    return true;
+  } catch (error) {
+    console.error('Error disconnecting LinkedIn:', error);
+    throw error;
+  }
+}
+
 export async function publishToLinkedIn(postContent: string, userId: string) {
   try {
-    // Try to refresh the token first
-    await refreshLinkedInToken(userId);
+    // Verify LinkedIn connection before attempting to publish
+    const isValid = await refreshLinkedInToken(userId);
     
-    const { data, error } = await supabase.functions.invoke('publish-to-linkedin', {
-      body: { content: postContent, userId }
+    if (!isValid) {
+      throw new Error('LinkedIn connection invalid or expired');
+    }
+    
+    const { data, error } = await supabase.functions.invoke('linkedin-publish', {
+      body: { 
+        content: postContent, 
+        userId 
+      }
     });
 
     if (error) throw error;
     return data;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error publishing to LinkedIn:', error);
+    
+    // Check if the error is related to token revocation
+    if (error.message?.includes('REVOKED_ACCESS_TOKEN') || 
+        error.message?.includes('expired') || 
+        error.message?.includes('No LinkedIn connection')) {
+      throw new Error('Your LinkedIn connection has expired. Please reconnect your account');
+    }
+    
     throw error;
   }
 }
+
